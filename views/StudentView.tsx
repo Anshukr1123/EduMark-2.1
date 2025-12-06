@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { User, Subject, AttendanceRecord, Assignment, FeeRecord, CollegeEvent, Notice } from '../types';
 import { MOCK_SUBJECTS, MOCK_ASSIGNMENTS, MOCK_FEES, MOCK_NOTICES, MOCK_COLLEGE_EVENTS, MOCK_TICKETS, MOCK_SERVICE_REQUESTS, MOCK_JOBS, MOCK_MESSAGES, MOCK_INTERNAL_ASSESSMENTS } from '../constants';
 import Layout, { NavItem } from '../components/Layout';
-import { supabase, isSupabaseConfigured } from '../supabaseClient';
+import { appwrite, databases, isAppwriteConfigured, DATABASE_ID, COLLECTIONS, Query } from '../appwriteClient';
 import { LayoutDashboard, CalendarDays, CalendarCheck, Clock, FileText, Folder, Award, Briefcase, Bus, Calendar, CreditCard, Bell, MessageSquare, HelpCircle, User as UserIcon, ScrollText, Laptop, Library, FilePlus, BadgeCheck, Building2 } from 'lucide-react';
 import { Toast, ToastProps } from '../components/UIComponents';
 
@@ -54,7 +54,7 @@ const StudentView: React.FC<StudentViewProps> = ({ user, onLogout }) => {
 
   // INITIAL DATA FETCH
   useEffect(() => {
-    if (!isSupabaseConfigured) {
+    if (!isAppwriteConfigured) {
         // Fallback to mock history if offline
         setHistory([
             { id: '1', studentId: user.id, studentName: user.name, subjectName: 'Data Structures', status: 'PRESENT', date: new Date().toISOString() }, 
@@ -66,16 +66,15 @@ const StudentView: React.FC<StudentViewProps> = ({ user, onLogout }) => {
     const fetchData = async () => {
         try {
             // 1. Fetch Attendance
-            const { data: attendanceData } = await supabase
-                .from('attendance_records')
-                .select('*')
-                .eq('student_id', user.id)
-                .order('date', { ascending: false });
+            const attendanceResponse = await databases.listDocuments(
+                DATABASE_ID,
+                COLLECTIONS.ATTENDANCE,
+                [Query.equal('student_id', user.id), Query.orderDesc('date')]
+            );
             
-            if (attendanceData) {
-                // Map DB snake_case to CamelCase types if necessary, though direct mapping is cleaner
-                const mappedHistory: AttendanceRecord[] = attendanceData.map(r => ({
-                    id: r.id,
+            if (attendanceResponse.documents) {
+                const mappedHistory: AttendanceRecord[] = attendanceResponse.documents.map(r => ({
+                    id: r.$id,
                     studentId: r.student_id,
                     studentName: user.name,
                     subjectName: r.subject_name,
@@ -102,14 +101,15 @@ const StudentView: React.FC<StudentViewProps> = ({ user, onLogout }) => {
             }
 
             // 2. Fetch Assignments
-            const { data: assignData } = await supabase
-                .from('assignments')
-                .select('*')
-                .eq('student_id', user.id);
+            const assignResponse = await databases.listDocuments(
+                DATABASE_ID,
+                COLLECTIONS.ASSIGNMENTS,
+                [Query.equal('student_id', user.id)]
+            );
             
-            if (assignData) {
-                const mappedAssignments: Assignment[] = assignData.map(a => ({
-                    id: a.id,
+            if (assignResponse.documents) {
+                const mappedAssignments: Assignment[] = assignResponse.documents.map(a => ({
+                    id: a.$id,
                     subject: a.subject,
                     title: a.title,
                     description: a.description,
@@ -125,14 +125,15 @@ const StudentView: React.FC<StudentViewProps> = ({ user, onLogout }) => {
             }
 
             // 3. Fetch Fees
-            const { data: feeData } = await supabase
-                .from('fees')
-                .select('*')
-                .eq('student_id', user.id);
+            const feeResponse = await databases.listDocuments(
+                DATABASE_ID,
+                COLLECTIONS.FEES,
+                [Query.equal('student_id', user.id)]
+            );
             
-            if (feeData) {
-                const mappedFees: FeeRecord[] = feeData.map(f => ({
-                    id: f.id,
+            if (feeResponse.documents) {
+                const mappedFees: FeeRecord[] = feeResponse.documents.map(f => ({
+                    id: f.$id,
                     title: f.title,
                     amount: f.amount,
                     dueDate: f.due_date,
@@ -143,9 +144,21 @@ const StudentView: React.FC<StudentViewProps> = ({ user, onLogout }) => {
             }
 
             // 4. Fetch Notices (Global)
-            const { data: noticeData } = await supabase.from('notices').select('*').limit(10);
-            if (noticeData && noticeData.length > 0) {
-                setNotices(noticeData as Notice[]);
+            const noticeResponse = await databases.listDocuments(
+                DATABASE_ID,
+                COLLECTIONS.NOTICES,
+                [Query.limit(10), Query.orderDesc('date')]
+            );
+            
+            if (noticeResponse.documents.length > 0) {
+                setNotices(noticeResponse.documents.map(n => ({
+                    id: n.$id,
+                    title: n.title,
+                    content: n.content,
+                    date: n.date,
+                    type: n.type,
+                    sender: n.sender
+                })) as Notice[]);
             }
 
         } catch (error) {
@@ -208,45 +221,50 @@ const StudentView: React.FC<StudentViewProps> = ({ user, onLogout }) => {
     return () => clearTimeout(timer);
   }, [assignments, fees]); 
 
-  // Real-time Subscription (Supabase)
+  // Real-time Subscription (Appwrite)
   useEffect(() => {
-    if (!isSupabaseConfigured) return;
+    if (!isAppwriteConfigured) return;
 
-    const channel = supabase
-      .channel('public:attendance_records')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'attendance_records', filter: `student_id=eq.${user.id}` }, (payload) => {
-          const newRecord = payload.new as any;
-          
-          // 1. Update History List
-          setHistory((prev) => [{ 
-              id: newRecord.id, 
-              studentId: newRecord.student_id, 
-              studentName: user.name, 
-              subjectName: newRecord.subject_name || 'General', 
-              status: newRecord.status, 
-              date: newRecord.date || new Date().toISOString() 
-          }, ...prev]);
+    const unsubscribe = appwrite.subscribe(
+        `databases.${DATABASE_ID}.collections.${COLLECTIONS.ATTENDANCE}.documents`, 
+        (response: any) => {
+            if (response.events.includes('databases.*.collections.*.documents.*.create')) {
+                const newRecord = response.payload;
+                
+                // Only process if it belongs to this student
+                if (newRecord.student_id !== user.id) return;
 
-          // 2. Update Subject Stats (Total/Attended counts)
-          if (newRecord.subject_name) {
-              setSubjects(prevSubjects => prevSubjects.map(sub => {
-                  if (sub.name === newRecord.subject_name) {
-                      return {
-                          ...sub,
-                          totalClasses: sub.totalClasses + 1,
-                          attendedClasses: newRecord.status === 'PRESENT' ? sub.attendedClasses + 1 : sub.attendedClasses
-                      };
-                  }
-                  return sub;
-              }));
-          }
+                // 1. Update History List
+                setHistory((prev) => [{ 
+                    id: newRecord.$id, 
+                    studentId: newRecord.student_id, 
+                    studentName: user.name, 
+                    subjectName: newRecord.subject_name || 'General', 
+                    status: newRecord.status, 
+                    date: newRecord.date || new Date().toISOString() 
+                }, ...prev]);
 
-          setLastUpdate(new Date().toLocaleTimeString());
-          addToast("Attendance Updated", `Marked ${newRecord.status} for ${newRecord.subject_name || 'Class'}`, newRecord.status === 'PRESENT' ? 'success' : 'error');
+                // 2. Update Subject Stats (Total/Attended counts)
+                if (newRecord.subject_name) {
+                    setSubjects(prevSubjects => prevSubjects.map(sub => {
+                        if (sub.name === newRecord.subject_name) {
+                            return {
+                                ...sub,
+                                totalClasses: sub.totalClasses + 1,
+                                attendedClasses: newRecord.status === 'PRESENT' ? sub.attendedClasses + 1 : sub.attendedClasses
+                            };
+                        }
+                        return sub;
+                    }));
+                }
+
+                setLastUpdate(new Date().toLocaleTimeString());
+                addToast("Attendance Updated", `Marked ${newRecord.status} for ${newRecord.subject_name || 'Class'}`, newRecord.status === 'PRESENT' ? 'success' : 'error');
+            }
         }
-      ).subscribe();
+    );
 
-    return () => { supabase.removeChannel(channel); };
+    return () => { unsubscribe(); };
   }, [user.id, user.name]);
 
   // Weighted Average Calculation

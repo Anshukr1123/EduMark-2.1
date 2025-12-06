@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { Assignment } from '../../../types';
 import { Card, Button, Badge, Modal } from '../../../components/UIComponents';
 import { UploadCloud, Clock, Plus, Calendar, FileText, CheckCircle, AlertCircle, File, Download, Paperclip, CheckCircle2 } from 'lucide-react';
-import { supabase, isSupabaseConfigured } from '../../../supabaseClient';
+import { account, storage, databases, isAppwriteConfigured, DATABASE_ID, COLLECTIONS, BUCKET_ID, ID } from '../../../appwriteClient';
 
 interface Props {
   assignments: Assignment[];
@@ -47,42 +47,31 @@ const StudentAssignments: React.FC<Props> = ({ assignments, setAssignments }) =>
     const today = new Date().toISOString().split('T')[0];
     let fileUrl = submissionFile.name;
 
-    // 1. Upload to Supabase Storage
-    if (isSupabaseConfigured) {
+    // 1. Upload to Appwrite Storage
+    if (isAppwriteConfigured) {
         try {
-            // Get current user to path the file correctly (assuming mock s1 for now if no auth context, but relying on supabase session is better)
-            const { data: { user } } = await supabase.auth.getUser();
-            const studentId = user?.id || 's1'; 
-            
-            const fileExt = submissionFile.name.split('.').pop();
-            const fileName = `${studentId}/${Date.now()}_${submissionFile.name.replace(/\s/g, '_')}`;
-            const filePath = `${fileName}`;
-
             // Upload
-            const { error: uploadError } = await supabase.storage
-                .from('documents')
-                .upload(filePath, submissionFile);
-
-            if (uploadError) throw uploadError;
+            const uploadedFile = await storage.createFile(
+                BUCKET_ID,
+                ID.unique(),
+                submissionFile
+            );
 
             // Get Public URL
-            const { data: urlData } = supabase.storage
-                .from('documents')
-                .getPublicUrl(filePath);
-            
-            fileUrl = urlData.publicUrl;
+            const urlData = storage.getFileView(BUCKET_ID, uploadedFile.$id);
+            fileUrl = urlData.href;
 
             // 2. Update Assignment Record
-            const { error: dbError } = await supabase
-                .from('assignments')
-                .update({
+            await databases.updateDocument(
+                DATABASE_ID,
+                COLLECTIONS.ASSIGNMENTS,
+                selectedAssignment.id,
+                {
                     status: 'SUBMITTED',
                     submitted_date: today,
                     file_url: fileUrl
-                })
-                .eq('id', selectedAssignment.id);
-
-            if (dbError) throw dbError;
+                }
+            );
 
             alert("Assignment submitted successfully!");
 

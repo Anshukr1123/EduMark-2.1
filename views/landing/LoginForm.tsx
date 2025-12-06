@@ -4,14 +4,14 @@ import { User, UserRole } from '../../types';
 import { MOCK_USERS, MOCK_COLLEGE_INFO } from '../../constants';
 import { Button } from '../../components/UIComponents';
 import { Mail, Lock, Eye, EyeOff, AlertCircle, Smartphone, CheckCircle2, Loader2, User as UserIcon, GraduationCap, ShieldCheck, Heart, ArrowLeft, MapPin, Phone, Award } from 'lucide-react';
-import { supabase, isSupabaseConfigured } from '../../supabaseClient';
+import { account, databases, isAppwriteConfigured, DATABASE_ID, COLLECTIONS, Query } from '../../appwriteClient';
 
 interface LoginFormProps {
   onLogin: (user: User) => void;
-  onRegisterClick: () => void;
+  onSwitchToSignUp?: () => void; // New prop
 }
 
-export const LoginForm: React.FC<LoginFormProps> = ({ onLogin, onRegisterClick }) => {
+export const LoginForm: React.FC<LoginFormProps> = ({ onLogin, onSwitchToSignUp }) => {
   const [activeRole, setActiveRole] = useState<UserRole>(UserRole.STUDENT);
   const [loginMethod, setLoginMethod] = useState<'EMAIL' | 'MOBILE'>('EMAIL');
   
@@ -34,9 +34,9 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onLogin, onRegisterClick }
   const [isResetLoading, setIsResetLoading] = useState(false);
   const [resetStatus, setResetStatus] = useState<'IDLE' | 'SUCCESS'>('IDLE');
 
-  // Auto-fill for demo convenience (Only if Supabase not configured)
+  // Auto-fill for demo convenience (Only if Appwrite not configured)
   useEffect(() => {
-     if (isSupabaseConfigured) return;
+     if (isAppwriteConfigured) return;
      const mockUser = MOCK_USERS.find(u => u.role === activeRole);
      if (mockUser) {
          setEmail(mockUser.email);
@@ -48,36 +48,19 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onLogin, onRegisterClick }
      }
   }, [activeRole]);
 
-  const fetchUserProfile = async (userId: string) => {
+  const fetchUserProfile = async (userId: string, email: string, name: string) => {
       try {
-          // Attempt to fetch profile from 'profiles' table
-          const { data, error } = await supabase
-              .from('profiles')
-              .select('*')
-              .eq('id', userId)
-              .single();
+          // Attempt to fetch profile from 'profiles' collection
+          const response = await databases.listDocuments(
+              DATABASE_ID,
+              COLLECTIONS.PROFILES,
+              [Query.equal('email', email)] // Searching by email as ID might differ or be mapped
+          );
           
-          if (error) {
-              console.warn("Profile fetch error (using fallback):", error.message);
-              // Fallback: Create a basic user object from auth data if profile table is missing/empty
-              const { data: authUser } = await supabase.auth.getUser();
-              if (authUser.user) {
-                  const fallbackUser: User = {
-                      id: authUser.user.id,
-                      name: authUser.user.user_metadata.full_name || authUser.user.email?.split('@')[0] || 'User',
-                      email: authUser.user.email || '',
-                      role: authUser.user.user_metadata.role || UserRole.STUDENT,
-                      avatar: 'https://picsum.photos/200'
-                  };
-                  onLogin(fallbackUser);
-                  return;
-              }
-              throw error;
-          }
-          
-          if (data) {
+          if (response.documents.length > 0) {
+              const data = response.documents[0];
               const user: User = {
-                  id: data.id,
+                  id: data.$id, // Using Document ID as User ID
                   name: data.name,
                   email: data.email,
                   role: (data.role as UserRole) || UserRole.STUDENT,
@@ -87,6 +70,16 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onLogin, onRegisterClick }
                   address: data.address
               };
               onLogin(user);
+          } else {
+              // Fallback: Create a basic user object from auth data if profile doc is missing
+              const fallbackUser: User = {
+                  id: userId,
+                  name: name || email.split('@')[0],
+                  email: email,
+                  role: UserRole.STUDENT,
+                  avatar: 'https://picsum.photos/200'
+              };
+              onLogin(fallbackUser);
           }
       } catch (err) {
           console.error("Error handling user profile:", err);
@@ -100,19 +93,21 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onLogin, onRegisterClick }
     setError('');
     setIsLoading(true);
 
-    // 1. SUPABASE LOGIN FLOW
-    if (isSupabaseConfigured) {
+    // 1. APPWRITE LOGIN FLOW
+    if (isAppwriteConfigured) {
         if (loginMethod === 'EMAIL') {
             try {
-                const { data, error } = await supabase.auth.signInWithPassword({
-                    email,
-                    password
-                });
+                // Check if session exists (optional cleanup) or just try login
+                try {
+                    await account.createEmailPasswordSession(email, password);
+                } catch(e) {
+                    // Ignore if already logged in or handle specific errors
+                }
                 
-                if (error) throw error;
+                const sessionUser = await account.get();
                 
-                if (data.user) {
-                    await fetchUserProfile(data.user.id);
+                if (sessionUser) {
+                    await fetchUserProfile(sessionUser.$id, sessionUser.email, sessionUser.name);
                 }
             } catch (err: any) {
                 console.error("Login Error:", err);
@@ -120,8 +115,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onLogin, onRegisterClick }
                 setIsLoading(false);
             }
         } else {
-            // Placeholder for Mobile OTP in Supabase (requires 3rd party provider setup)
-            setError("Mobile OTP login is currently disabled in this demo environment.");
+            setError("Mobile OTP login requires Appwrite Phone Auth setup.");
             setIsLoading(false);
         }
         return;
@@ -161,16 +155,13 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onLogin, onRegisterClick }
       setIsGoogleLoading(true);
       setError('');
 
-      if (isSupabaseConfigured) {
+      if (isAppwriteConfigured) {
           try {
-              const { error } = await supabase.auth.signInWithOAuth({
-                  provider: 'google',
-                  options: {
-                      redirectTo: window.location.origin,
-                      queryParams: { access_type: 'offline', prompt: 'consent' },
-                  },
-              });
-              if (error) throw error;
+              account.createOAuth2Session(
+                  'google',
+                  window.location.origin, // Success URL
+                  window.location.origin  // Failure URL
+              );
           } catch (err: any) {
               console.error("Google Login Error:", err);
               setError(err.message || 'Failed to connect with Google.');
@@ -191,12 +182,12 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onLogin, onRegisterClick }
       if(!resetEmail) return;
       setIsResetLoading(true);
       
-      if (isSupabaseConfigured) {
+      if (isAppwriteConfigured) {
           try {
-              const { error } = await supabase.auth.resetPasswordForEmail(resetEmail, {
-                  redirectTo: window.location.origin,
-              });
-              if (error) throw error;
+              await account.createRecovery(
+                  resetEmail,
+                  window.location.origin + '/reset-password'
+              );
               setResetStatus('SUCCESS');
           } catch (err: any) {
               setError(err.message);
@@ -292,7 +283,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onLogin, onRegisterClick }
             <div className="p-8 pb-6 -mt-4 bg-white rounded-t-3xl relative z-20">
                 <form onSubmit={handleLogin} className="space-y-4">
                     {/* Only show Role Selector if in Mock Mode or debugging */}
-                    {!isSupabaseConfigured && (
+                    {!isAppwriteConfigured && (
                         <div className="grid grid-cols-4 gap-2 mb-4">
                             {roles.map(r => (
                                 <button
@@ -409,11 +400,19 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onLogin, onRegisterClick }
             </div>
 
             <div className="bg-slate-50 border-t border-slate-100 p-5">
-                <div className="text-center mb-4">
-                    <p className="text-xs text-slate-500">
-                        Don't have an account? <button onClick={onRegisterClick} className="text-indigo-600 font-bold hover:underline ml-1">Create Student Account</button>
-                    </p>
-                </div>
+                {onSwitchToSignUp && (
+                    <div className="mb-4 text-center">
+                        <p className="text-xs text-slate-600 mb-2">New Student?</p>
+                        <Button 
+                            variant="secondary" 
+                            className="w-full text-indigo-600 border-indigo-100 bg-indigo-50/50 hover:bg-indigo-50 font-bold"
+                            onClick={onSwitchToSignUp}
+                        >
+                            Create an Account
+                        </Button>
+                    </div>
+                )}
+
                 <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-3 flex items-center gap-2">
                     <ShieldCheck className="w-3 h-3 text-indigo-400"/>
                     Institution Details

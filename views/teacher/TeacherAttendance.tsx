@@ -4,7 +4,7 @@ import { User, AttendanceRecord, UserRole } from '../../types';
 import { MOCK_ATTENDANCE_LIST, MOCK_USERS, MOCK_SUBJECTS } from '../../constants';
 import { Card, Button, Badge, Modal } from '../../components/UIComponents';
 import { Plus, CheckCheck, Calendar, RefreshCcw, Users, CheckCircle2, XCircle, Clock, Percent, Save, Loader2, BookOpen } from 'lucide-react';
-import { supabase, isSupabaseConfigured } from '../../supabaseClient';
+import { databases, isAppwriteConfigured, DATABASE_ID, COLLECTIONS, ID } from '../../appwriteClient';
 
 interface Props { user: User; }
 
@@ -54,23 +54,30 @@ const TeacherAttendance: React.FC<Props> = () => {
       // Optimistic Update: Update local state immediately
       setAttendanceData([...newRecords, ...attendanceData]); 
       
-      // Real-time Update: Write to Supabase to notify students
-      if (isSupabaseConfigured) {
+      // Real-time Update: Write to Appwrite to notify students
+      if (isAppwriteConfigured) {
           try {
-              const dbRecords = newRecords.map(r => ({
-                  student_id: r.studentId,
-                  status: r.status,
-                  date: r.date,
-                  subject_name: r.subjectName
-              }));
-              await supabase.from('attendance_records').insert(dbRecords);
+              const promises = newRecords.map(r => 
+                  databases.createDocument(
+                      DATABASE_ID,
+                      COLLECTIONS.ATTENDANCE,
+                      ID.unique(),
+                      {
+                          student_id: r.studentId,
+                          status: r.status,
+                          date: r.date,
+                          subject_name: r.subjectName
+                      }
+                  )
+              );
+              await Promise.all(promises);
           } catch (error) {
               console.error("Failed to sync attendance to cloud:", error);
           }
       }
 
       // Simulate network delay for demo feel if offline
-      if (!isSupabaseConfigured) {
+      if (!isAppwriteConfigured) {
           await new Promise(resolve => setTimeout(resolve, 800));
       }
 

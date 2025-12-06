@@ -5,7 +5,7 @@ import { MOCK_ASSIGNMENTS, MOCK_COURSE_MATERIALS, MOCK_EXAM_DUTIES, MOCK_SUBJECT
 import { Card, Button, Badge, Modal } from '../../components/UIComponents';
 import { Plus, FileText, UploadCloud, Trash2, Video, Link as LinkIcon, File as FileIcon, Calendar, ArrowLeft, Download, Save, CheckCircle, Edit, MessageSquare, CheckCircle2, Search, Filter, X, Loader2 } from 'lucide-react';
 import TeacherQuizzes from './TeacherQuizzes';
-import { supabase, isSupabaseConfigured } from '../../supabaseClient';
+import { databases, isAppwriteConfigured, DATABASE_ID, COLLECTIONS, ID, Query } from '../../appwriteClient';
 
 interface Props { user: User; activeTab: string; }
 
@@ -60,21 +60,25 @@ const TeacherAcademics: React.FC<Props> = ({ activeTab }) => {
       maxMarks: newAssignment.maxMarks
     };
     
-    // 2. Supabase Update
-    if (isSupabaseConfigured) {
+    // 2. Appwrite Update
+    if (isAppwriteConfigured) {
         try {
             // For demo purposes, we assign this to the mock student 's1' (Alice)
             // In a real app, you would iterate through a list of student IDs in a class
-            const { error } = await supabase.from('assignments').insert({
-                title: newAssignment.title,
-                subject: newAssignment.subject,
-                due_date: newAssignment.dueDate,
-                max_marks: newAssignment.maxMarks,
-                status: 'PENDING',
-                student_id: 's1', // Hardcoded to ensure visibility in Student View
-                description: 'New assignment created by teacher.'
-            });
-            if (error) throw error;
+            await databases.createDocument(
+                DATABASE_ID,
+                COLLECTIONS.ASSIGNMENTS,
+                ID.unique(),
+                {
+                    title: newAssignment.title,
+                    subject: newAssignment.subject,
+                    due_date: newAssignment.dueDate,
+                    max_marks: newAssignment.maxMarks,
+                    status: 'PENDING',
+                    student_id: 's1', // Hardcoded to ensure visibility in Student View
+                    description: 'New assignment created by teacher.'
+                }
+            );
             alert("Assignment published to Student Portal (Alice).");
         } catch (error: any) {
             console.error("Error creating assignment:", error);
@@ -114,31 +118,37 @@ const TeacherAcademics: React.FC<Props> = ({ activeTab }) => {
   const openGrading = async (assignment: Assignment) => {
       setSelectedAssignment(assignment);
       
-      if (isSupabaseConfigured) {
+      if (isAppwriteConfigured) {
           // Fetch real submissions for this assignment title/subject from DB
-          // Note: In this simple schema, we are looking for records that match the assignment details
-          // In a proper relational DB, we would query by assignment_id foreign key
-          const { data, error } = await supabase
-            .from('assignments')
-            .select('*')
-            .eq('title', assignment.title)
-            .neq('status', 'PENDING'); // Get submitted/graded ones
+          try {
+              const response = await databases.listDocuments(
+                  DATABASE_ID,
+                  COLLECTIONS.ASSIGNMENTS,
+                  [
+                      Query.equal('title', assignment.title),
+                      Query.notEqual('status', 'PENDING') // Get submitted/graded ones
+                  ]
+              );
 
-          if (data && data.length > 0) {
-              const mappedSubmissions: Submission[] = data.map((d: any) => ({
-                  id: d.id,
-                  studentName: 'Student', // In real app, join with profiles
-                  studentId: d.student_id,
-                  submittedDate: d.submitted_date || d.due_date,
-                  status: d.status,
-                  fileUrl: d.file_url || 'No file',
-                  marks: d.marks || '',
-                  feedback: d.feedback || ''
-              }));
-              setSubmissions(mappedSubmissions);
-          } else {
-              // Fallback if no real data found or error
-              setSubmissions(MOCK_SUBMISSIONS); 
+              if (response.documents.length > 0) {
+                  const mappedSubmissions: Submission[] = response.documents.map((d: any) => ({
+                      id: d.$id,
+                      studentName: 'Student', // In real app, join with profiles
+                      studentId: d.student_id,
+                      submittedDate: d.submitted_date || d.due_date,
+                      status: d.status,
+                      fileUrl: d.file_url || 'No file',
+                      marks: d.marks || '',
+                      feedback: d.feedback || ''
+                  }));
+                  setSubmissions(mappedSubmissions);
+              } else {
+                  // Fallback if no real data found
+                  setSubmissions(MOCK_SUBMISSIONS); 
+              }
+          } catch (e) {
+              console.error("Fetch submissions error:", e);
+              setSubmissions(MOCK_SUBMISSIONS);
           }
       } else {
           setSubmissions(MOCK_SUBMISSIONS);
@@ -151,18 +161,18 @@ const TeacherAcademics: React.FC<Props> = ({ activeTab }) => {
   const handleSaveGrade = async (submissionId: string) => {
       setIsSaving(true);
       
-      if (isSupabaseConfigured) {
+      if (isAppwriteConfigured) {
           try {
-              const { error } = await supabase
-                  .from('assignments')
-                  .update({
+              await databases.updateDocument(
+                  DATABASE_ID,
+                  COLLECTIONS.ASSIGNMENTS,
+                  submissionId,
+                  {
                       status: 'GRADED',
                       marks: gradeData.marks,
                       feedback: gradeData.feedback
-                  })
-                  .eq('id', submissionId);
-              
-              if (error) throw error;
+                  }
+              );
           } catch (err) {
               console.error("Error updating grade:", err);
               alert("Failed to save grade to database.");

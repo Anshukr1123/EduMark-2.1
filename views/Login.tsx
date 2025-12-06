@@ -8,7 +8,7 @@ import { EventsSection } from './landing/Events';
 import { GallerySection } from './landing/Gallery';
 import { Footer } from './landing/Footer';
 import { LoginForm } from './landing/LoginForm';
-import { RegisterForm } from './landing/RegisterForm';
+import { SignUpForm } from './landing/SignUpForm'; // Import SignUpForm
 import { X, ArrowRight } from 'lucide-react';
 
 interface LoginProps {
@@ -17,10 +17,10 @@ interface LoginProps {
 
 const Login: React.FC<LoginProps> = ({ onLogin }) => {
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
-  const [authMode, setAuthMode] = useState<'LOGIN' | 'REGISTER'>('LOGIN');
+  const [isSignUpMode, setIsSignUpMode] = useState(false); // State to toggle Sign Up
 
   const handleOpenLogin = () => {
-      setAuthMode('LOGIN');
+      setIsSignUpMode(false);
       setIsLoginModalOpen(true);
   };
 
@@ -75,15 +75,15 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                       </div>
                   </div>
 
-                  {/* Hero Right Side: Embedded Auth Form for Desktop */}
+                  {/* Hero Right Side: Embedded Auth Forms for Desktop */}
                   <div className="hidden lg:flex justify-center relative animate-in slide-in-from-right-8 duration-1000 delay-200">
                       {/* Decorative backing for the form */}
                       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[120%] h-[120%] bg-gradient-to-tr from-white/40 to-white/10 rounded-full blur-3xl -z-10"></div>
                       <div className="w-full max-w-md transform transition-all hover:scale-[1.01] duration-500 shadow-2xl rounded-2xl">
-                          {authMode === 'LOGIN' ? (
-                              <LoginForm onLogin={onLogin} onRegisterClick={() => setAuthMode('REGISTER')} />
+                          {isSignUpMode ? (
+                              <SignUpForm onLogin={onLogin} onSwitchToLogin={() => setIsSignUpMode(false)} />
                           ) : (
-                              <RegisterForm onLogin={onLogin} onLoginClick={() => setAuthMode('LOGIN')} />
+                              <LoginForm onLogin={onLogin} onSwitchToSignUp={() => setIsSignUpMode(true)} />
                           )}
                       </div>
                   </div>
@@ -95,7 +95,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
       <GallerySection />
       <Footer />
 
-      {/* Login/Register Modal Overlay (Mobile only or manual trigger) */}
+      {/* Login Modal Overlay (Mobile only or manual trigger) */}
       {isLoginModalOpen && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
             <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-md transition-opacity animate-in fade-in duration-300" onClick={() => setIsLoginModalOpen(false)}></div>
@@ -106,10 +106,10 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                 >
                     <X className="w-6 h-6" />
                 </button>
-                {authMode === 'LOGIN' ? (
-                    <LoginForm onLogin={onLogin} onRegisterClick={() => setAuthMode('REGISTER')} />
+                {isSignUpMode ? (
+                    <SignUpForm onLogin={onLogin} onSwitchToLogin={() => setIsSignUpMode(false)} />
                 ) : (
-                    <RegisterForm onLogin={onLogin} onLoginClick={() => setAuthMode('LOGIN')} />
+                    <LoginForm onLogin={onLogin} onSwitchToSignUp={() => setIsSignUpMode(true)} />
                 )}
             </div>
         </div>
