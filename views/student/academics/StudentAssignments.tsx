@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { Assignment } from '../../../types';
 import { Card, Button, Badge, Modal } from '../../../components/UIComponents';
 import { UploadCloud, Clock, Plus, Calendar, FileText, CheckCircle, AlertCircle, File, Download, Paperclip, CheckCircle2 } from 'lucide-react';
+import { supabase, isSupabaseConfigured } from '../../../supabaseClient';
 
 interface Props {
   assignments: Assignment[];
@@ -38,25 +39,76 @@ const StudentAssignments: React.FC<Props> = ({ assignments, setAssignments }) =>
     setNewAssignment({ title: '', subject: '', dueDate: '', description: '' });
   };
 
-  const handleAssignmentSubmit = (e: React.FormEvent) => {
+  const handleAssignmentSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedAssignment || !submissionFile) return;
     setIsSubmitting(true);
     
     const today = new Date().toISOString().split('T')[0];
+    let fileUrl = submissionFile.name;
 
-    setTimeout(() => {
-        setAssignments(prev => prev.map(a => a.id === selectedAssignment.id ? { 
-            ...a, 
-            status: 'SUBMITTED',
-            submittedDate: today,
-            fileUrl: submissionFile.name
-        } : a));
-        setIsSubmitting(false);
-        setIsSubmitModalOpen(false);
-        setSubmissionFile(null);
-        alert("Assignment Submitted Successfully!");
-    }, 1500);
+    // 1. Upload to Supabase Storage
+    if (isSupabaseConfigured) {
+        try {
+            // Get current user to path the file correctly (assuming mock s1 for now if no auth context, but relying on supabase session is better)
+            const { data: { user } } = await supabase.auth.getUser();
+            const studentId = user?.id || 's1'; 
+            
+            const fileExt = submissionFile.name.split('.').pop();
+            const fileName = `${studentId}/${Date.now()}_${submissionFile.name.replace(/\s/g, '_')}`;
+            const filePath = `${fileName}`;
+
+            // Upload
+            const { error: uploadError } = await supabase.storage
+                .from('documents')
+                .upload(filePath, submissionFile);
+
+            if (uploadError) throw uploadError;
+
+            // Get Public URL
+            const { data: urlData } = supabase.storage
+                .from('documents')
+                .getPublicUrl(filePath);
+            
+            fileUrl = urlData.publicUrl;
+
+            // 2. Update Assignment Record
+            const { error: dbError } = await supabase
+                .from('assignments')
+                .update({
+                    status: 'SUBMITTED',
+                    submitted_date: today,
+                    file_url: fileUrl
+                })
+                .eq('id', selectedAssignment.id);
+
+            if (dbError) throw dbError;
+
+            alert("Assignment submitted successfully!");
+
+        } catch (error: any) {
+            console.error("Submission error:", error);
+            alert("Error submitting assignment: " + error.message);
+            // Fallback for demo UX so it doesn't just hang
+            fileUrl = "(Local Demo) " + submissionFile.name;
+        }
+    } else {
+        // Mock delay for offline
+        await new Promise(resolve => setTimeout(resolve, 1500));
+        alert("Assignment Submitted Locally (Demo Mode)");
+    }
+
+    // 3. Update Local State
+    setAssignments(prev => prev.map(a => a.id === selectedAssignment.id ? { 
+        ...a, 
+        status: 'SUBMITTED',
+        submittedDate: today,
+        fileUrl: fileUrl
+    } : a));
+
+    setIsSubmitting(false);
+    setIsSubmitModalOpen(false);
+    setSubmissionFile(null);
   };
 
   const getStatusVariant = (status: Assignment['status']) => {
@@ -159,8 +211,9 @@ const StudentAssignments: React.FC<Props> = ({ assignments, setAssignments }) =>
                                          <FileText className="w-3 h-3 mr-1"/> View Guidelines
                                      </div>
                                      {assign.status === 'SUBMITTED' && assign.fileUrl && (
-                                         <div className="flex items-center text-xs text-slate-600 font-medium bg-slate-100 px-2 py-1 rounded">
-                                             <Paperclip className="w-3 h-3 mr-1"/> {assign.fileUrl}
+                                         <div className="flex items-center text-xs text-slate-600 font-medium bg-slate-100 px-2 py-1 rounded max-w-[200px]">
+                                             <Paperclip className="w-3 h-3 mr-1 flex-shrink-0"/> 
+                                             <span className="truncate">{assign.fileUrl.split('/').pop()}</span>
                                          </div>
                                      )}
                                  </div>
@@ -215,7 +268,9 @@ const StudentAssignments: React.FC<Props> = ({ assignments, setAssignments }) =>
                 <label className="text-sm font-medium text-slate-700">Comments (Optional)</label>
                 <textarea className="w-full border rounded-lg p-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" rows={2} placeholder="Add any notes for the instructor..."></textarea>
             </div>
-            <Button type="submit" className="w-full" isLoading={isSubmitting} disabled={!submissionFile}>Submit Assignment</Button>
+            <Button type="submit" className="w-full" isLoading={isSubmitting} disabled={!submissionFile || isSubmitting}>
+                {isSubmitting ? 'Uploading...' : 'Submit Assignment'}
+            </Button>
          </form>
        </Modal>
 

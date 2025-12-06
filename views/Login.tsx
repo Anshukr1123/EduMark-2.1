@@ -8,6 +8,7 @@ import { EventsSection } from './landing/Events';
 import { GallerySection } from './landing/Gallery';
 import { Footer } from './landing/Footer';
 import { LoginForm } from './landing/LoginForm';
+import { RegisterForm } from './landing/RegisterForm';
 import { X, ArrowRight } from 'lucide-react';
 
 interface LoginProps {
@@ -16,10 +17,16 @@ interface LoginProps {
 
 const Login: React.FC<LoginProps> = ({ onLogin }) => {
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
+  const [authMode, setAuthMode] = useState<'LOGIN' | 'REGISTER'>('LOGIN');
+
+  const handleOpenLogin = () => {
+      setAuthMode('LOGIN');
+      setIsLoginModalOpen(true);
+  };
 
   return (
     <div className="min-h-screen bg-slate-50 font-sans selection:bg-indigo-100 selection:text-indigo-900">
-      <Navbar onOpenLogin={() => setIsLoginModalOpen(true)} />
+      <Navbar onOpenLogin={handleOpenLogin} />
 
       {/* Hero Section */}
       <section className="relative pt-24 pb-20 lg:pt-32 lg:pb-32 overflow-hidden min-h-[90vh] flex items-center justify-center">
@@ -53,7 +60,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                       <div className="flex flex-col sm:flex-row justify-center lg:justify-start gap-4 pt-4">
                           {/* Only show Get Started (Modal trigger) on Mobile */}
                           <div className="lg:hidden w-full sm:w-auto">
-                              <Button size="lg" className="rounded-full px-8 shadow-xl shadow-indigo-200 w-full sm:w-auto py-4 text-base" onClick={() => setIsLoginModalOpen(true)}>Login to Portal</Button>
+                              <Button size="lg" className="rounded-full px-8 shadow-xl shadow-indigo-200 w-full sm:w-auto py-4 text-base" onClick={handleOpenLogin}>Login to Portal</Button>
                           </div>
                           <Button size="lg" variant="outline" className="rounded-full px-8 py-4 text-base border-slate-300 hover:bg-white/80 backdrop-blur-sm group w-full sm:w-auto">
                               Explore Campus <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform"/>
@@ -68,12 +75,16 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                       </div>
                   </div>
 
-                  {/* Hero Right Side: Embedded Login Form for Desktop */}
+                  {/* Hero Right Side: Embedded Auth Form for Desktop */}
                   <div className="hidden lg:flex justify-center relative animate-in slide-in-from-right-8 duration-1000 delay-200">
                       {/* Decorative backing for the form */}
                       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[120%] h-[120%] bg-gradient-to-tr from-white/40 to-white/10 rounded-full blur-3xl -z-10"></div>
                       <div className="w-full max-w-md transform transition-all hover:scale-[1.01] duration-500 shadow-2xl rounded-2xl">
-                          <LoginForm onLogin={onLogin} />
+                          {authMode === 'LOGIN' ? (
+                              <LoginForm onLogin={onLogin} onRegisterClick={() => setAuthMode('REGISTER')} />
+                          ) : (
+                              <RegisterForm onLogin={onLogin} onLoginClick={() => setAuthMode('LOGIN')} />
+                          )}
                       </div>
                   </div>
               </div>
@@ -84,7 +95,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
       <GallerySection />
       <Footer />
 
-      {/* Login Modal Overlay (Mobile only or manual trigger) */}
+      {/* Login/Register Modal Overlay (Mobile only or manual trigger) */}
       {isLoginModalOpen && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
             <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-md transition-opacity animate-in fade-in duration-300" onClick={() => setIsLoginModalOpen(false)}></div>
@@ -95,7 +106,11 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                 >
                     <X className="w-6 h-6" />
                 </button>
-                <LoginForm onLogin={onLogin} />
+                {authMode === 'LOGIN' ? (
+                    <LoginForm onLogin={onLogin} onRegisterClick={() => setAuthMode('REGISTER')} />
+                ) : (
+                    <RegisterForm onLogin={onLogin} onLoginClick={() => setAuthMode('LOGIN')} />
+                )}
             </div>
         </div>
       )}

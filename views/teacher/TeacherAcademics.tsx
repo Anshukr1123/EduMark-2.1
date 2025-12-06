@@ -3,8 +3,9 @@ import React, { useState } from 'react';
 import { User, Assignment, CourseMaterial } from '../../types';
 import { MOCK_ASSIGNMENTS, MOCK_COURSE_MATERIALS, MOCK_EXAM_DUTIES, MOCK_SUBJECTS } from '../../constants';
 import { Card, Button, Badge, Modal } from '../../components/UIComponents';
-import { Plus, FileText, UploadCloud, Trash2, Video, Link as LinkIcon, File as FileIcon, Calendar, ArrowLeft, Download, Save, CheckCircle, Edit, MessageSquare, CheckCircle2, Search, Filter, X } from 'lucide-react';
+import { Plus, FileText, UploadCloud, Trash2, Video, Link as LinkIcon, File as FileIcon, Calendar, ArrowLeft, Download, Save, CheckCircle, Edit, MessageSquare, CheckCircle2, Search, Filter, X, Loader2 } from 'lucide-react';
 import TeacherQuizzes from './TeacherQuizzes';
+import { supabase, isSupabaseConfigured } from '../../supabaseClient';
 
 interface Props { user: User; activeTab: string; }
 
@@ -33,8 +34,9 @@ const TeacherAcademics: React.FC<Props> = ({ activeTab }) => {
   // Modal States
   const [isAssignmentModalOpen, setIsAssignmentModalOpen] = useState(false);
   const [isMaterialModalOpen, setIsMaterialModalOpen] = useState(false);
-  const [newAssignment, setNewAssignment] = useState({ title: '', subject: '', dueDate: '' });
+  const [newAssignment, setNewAssignment] = useState({ title: '', subject: '', dueDate: '', maxMarks: 100 });
   const [newMaterial, setNewMaterial] = useState({ title: '', subject: '', type: 'PDF' as const });
+  const [isSaving, setIsSaving] = useState(false);
 
   // Grading State
   const [selectedAssignment, setSelectedAssignment] = useState<Assignment | null>(null);
@@ -44,16 +46,49 @@ const TeacherAcademics: React.FC<Props> = ({ activeTab }) => {
   const [submissionFilter, setSubmissionFilter] = useState<'ALL' | 'PENDING' | 'GRADED'>('ALL');
   const [searchTerm, setSearchTerm] = useState('');
 
-  const handleCreateAssignment = () => {
+  const handleCreateAssignment = async () => {
+    setIsSaving(true);
+    const newId = Math.random().toString();
+    
+    // 1. Local Update
     const assign: Assignment = {
-      id: Math.random().toString(),
+      id: newId,
       title: newAssignment.title,
       subject: newAssignment.subject,
       dueDate: newAssignment.dueDate,
-      status: 'PENDING'
+      status: 'PENDING',
+      maxMarks: newAssignment.maxMarks
     };
+    
+    // 2. Supabase Update
+    if (isSupabaseConfigured) {
+        try {
+            // For demo purposes, we assign this to the mock student 's1' (Alice)
+            // In a real app, you would iterate through a list of student IDs in a class
+            const { error } = await supabase.from('assignments').insert({
+                title: newAssignment.title,
+                subject: newAssignment.subject,
+                due_date: newAssignment.dueDate,
+                max_marks: newAssignment.maxMarks,
+                status: 'PENDING',
+                student_id: 's1', // Hardcoded to ensure visibility in Student View
+                description: 'New assignment created by teacher.'
+            });
+            if (error) throw error;
+            alert("Assignment published to Student Portal (Alice).");
+        } catch (error: any) {
+            console.error("Error creating assignment:", error);
+            alert("Failed to sync with database, but added locally.");
+        }
+    } else {
+        // Simulate delay
+        await new Promise(resolve => setTimeout(resolve, 800));
+    }
+
     setAssignments([...assignments, assign]);
     setIsAssignmentModalOpen(false);
+    setIsSaving(false);
+    setNewAssignment({ title: '', subject: '', dueDate: '', maxMarks: 100 });
   };
 
   const handleUploadMaterial = () => {
@@ -76,19 +111,71 @@ const TeacherAcademics: React.FC<Props> = ({ activeTab }) => {
       }
   }
 
-  const openGrading = (assignment: Assignment) => {
+  const openGrading = async (assignment: Assignment) => {
       setSelectedAssignment(assignment);
-      setSubmissions(MOCK_SUBMISSIONS); // In real app, fetch submissions for ID
+      
+      if (isSupabaseConfigured) {
+          // Fetch real submissions for this assignment title/subject from DB
+          // Note: In this simple schema, we are looking for records that match the assignment details
+          // In a proper relational DB, we would query by assignment_id foreign key
+          const { data, error } = await supabase
+            .from('assignments')
+            .select('*')
+            .eq('title', assignment.title)
+            .neq('status', 'PENDING'); // Get submitted/graded ones
+
+          if (data && data.length > 0) {
+              const mappedSubmissions: Submission[] = data.map((d: any) => ({
+                  id: d.id,
+                  studentName: 'Student', // In real app, join with profiles
+                  studentId: d.student_id,
+                  submittedDate: d.submitted_date || d.due_date,
+                  status: d.status,
+                  fileUrl: d.file_url || 'No file',
+                  marks: d.marks || '',
+                  feedback: d.feedback || ''
+              }));
+              setSubmissions(mappedSubmissions);
+          } else {
+              // Fallback if no real data found or error
+              setSubmissions(MOCK_SUBMISSIONS); 
+          }
+      } else {
+          setSubmissions(MOCK_SUBMISSIONS);
+      }
+      
       setSubmissionFilter('ALL');
       setSearchTerm('');
   };
 
-  const handleSaveGrade = (submissionId: string) => {
+  const handleSaveGrade = async (submissionId: string) => {
+      setIsSaving(true);
+      
+      if (isSupabaseConfigured) {
+          try {
+              const { error } = await supabase
+                  .from('assignments')
+                  .update({
+                      status: 'GRADED',
+                      marks: gradeData.marks,
+                      feedback: gradeData.feedback
+                  })
+                  .eq('id', submissionId);
+              
+              if (error) throw error;
+          } catch (err) {
+              console.error("Error updating grade:", err);
+              alert("Failed to save grade to database.");
+          }
+      }
+
       setSubmissions(prev => prev.map(sub => 
           sub.id === submissionId 
           ? { ...sub, status: 'GRADED', marks: gradeData.marks, feedback: gradeData.feedback } 
           : sub
       ));
+      
+      setIsSaving(false);
       setEditingSubmission(null);
       setGradeData({ marks: '', feedback: '' });
   };
@@ -184,9 +271,9 @@ const TeacherAcademics: React.FC<Props> = ({ activeTab }) => {
                                         <Badge variant={sub.status === 'GRADED' ? 'success' : sub.status === 'LATE' ? 'error' : 'warning'}>{sub.status}</Badge>
                                     </div>
                                     <div className="mt-4 flex items-center gap-3">
-                                        <div className="flex items-center bg-slate-50 px-3 py-2 rounded-lg text-sm text-slate-700 border border-slate-200 w-fit cursor-pointer hover:bg-slate-100">
-                                            <FileIcon className="w-4 h-4 mr-2 text-indigo-500" /> 
-                                            {sub.fileUrl}
+                                        <div className="flex items-center bg-slate-50 px-3 py-2 rounded-lg text-sm text-slate-700 border border-slate-200 w-fit cursor-pointer hover:bg-slate-100 max-w-md truncate">
+                                            <FileIcon className="w-4 h-4 mr-2 text-indigo-500 flex-shrink-0" /> 
+                                            <a href={sub.fileUrl} target="_blank" rel="noopener noreferrer" className="truncate hover:underline hover:text-indigo-600">{sub.fileUrl.split('/').pop()}</a>
                                         </div>
                                         <div className="text-xs text-slate-400">Submitted: {sub.submittedDate}</div>
                                     </div>
@@ -251,7 +338,7 @@ const TeacherAcademics: React.FC<Props> = ({ activeTab }) => {
 
                                             {editingSubmission === sub.id && (
                                                 <div className="flex gap-2 animate-in fade-in slide-in-from-top-1 duration-200 pt-1">
-                                                    <Button size="sm" className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm" onClick={() => handleSaveGrade(sub.id)}>
+                                                    <Button size="sm" className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm" onClick={() => handleSaveGrade(sub.id)} isLoading={isSaving}>
                                                         <CheckCircle className="w-3 h-3 mr-1.5"/> Save Grade
                                                     </Button>
                                                     <Button size="sm" variant="secondary" onClick={() => setEditingSubmission(null)}>
@@ -302,7 +389,8 @@ const TeacherAcademics: React.FC<Props> = ({ activeTab }) => {
                <input placeholder="Title" className="w-full border p-2 rounded" onChange={e => setNewAssignment({...newAssignment, title: e.target.value})} />
                <input placeholder="Subject" className="w-full border p-2 rounded" onChange={e => setNewAssignment({...newAssignment, subject: e.target.value})} />
                <input type="date" className="w-full border p-2 rounded" onChange={e => setNewAssignment({...newAssignment, dueDate: e.target.value})} />
-               <Button className="w-full" onClick={handleCreateAssignment}>Create</Button>
+               <input type="number" placeholder="Max Marks (e.g. 100)" className="w-full border p-2 rounded" onChange={e => setNewAssignment({...newAssignment, maxMarks: parseInt(e.target.value)})} />
+               <Button className="w-full" onClick={handleCreateAssignment} isLoading={isSaving}>Create & Publish</Button>
              </div>
            </Modal>
         </div>

@@ -8,9 +8,10 @@ import { supabase, isSupabaseConfigured } from '../../supabaseClient';
 
 interface LoginFormProps {
   onLogin: (user: User) => void;
+  onRegisterClick: () => void;
 }
 
-export const LoginForm: React.FC<LoginFormProps> = ({ onLogin }) => {
+export const LoginForm: React.FC<LoginFormProps> = ({ onLogin, onRegisterClick }) => {
   const [activeRole, setActiveRole] = useState<UserRole>(UserRole.STUDENT);
   const [loginMethod, setLoginMethod] = useState<'EMAIL' | 'MOBILE'>('EMAIL');
   
@@ -65,7 +66,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onLogin }) => {
                       id: authUser.user.id,
                       name: authUser.user.user_metadata.full_name || authUser.user.email?.split('@')[0] || 'User',
                       email: authUser.user.email || '',
-                      role: UserRole.STUDENT, // Default to student if unknown
+                      role: authUser.user.user_metadata.role || UserRole.STUDENT,
                       avatar: 'https://picsum.photos/200'
                   };
                   onLogin(fallbackUser);
@@ -408,6 +409,11 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onLogin }) => {
             </div>
 
             <div className="bg-slate-50 border-t border-slate-100 p-5">
+                <div className="text-center mb-4">
+                    <p className="text-xs text-slate-500">
+                        Don't have an account? <button onClick={onRegisterClick} className="text-indigo-600 font-bold hover:underline ml-1">Create Student Account</button>
+                    </p>
+                </div>
                 <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-3 flex items-center gap-2">
                     <ShieldCheck className="w-3 h-3 text-indigo-400"/>
                     Institution Details
