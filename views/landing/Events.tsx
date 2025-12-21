@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { MOCK_COLLEGE_EVENTS } from '../../constants';
 import { Card, Button } from '../../components/UIComponents';
@@ -6,9 +5,9 @@ import { MapPin, Calendar, ArrowRight } from 'lucide-react';
 
 export const EventsSection: React.FC = () => {
   return (
-    <section id="events" className="py-20 bg-white">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="text-center mb-16">
+    <section id="events" className="full-screen bg-white justify-center">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full">
+            <div className="text-center mb-12">
                 <h2 className="text-3xl md:text-4xl font-bold text-slate-900 mb-4">Upcoming Campus Events</h2>
                 <p className="text-slate-500 max-w-2xl mx-auto">From tech symposiums to cultural fests, discover what's happening at EduMark this semester.</p>
             </div>

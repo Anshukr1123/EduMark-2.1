@@ -16,9 +16,14 @@ interface GalleryItem {
   caption: string;
 }
 
-interface Props { activeTab: string; }
+// Added missing onShowToast to Props interface
+interface Props { 
+  activeTab: string; 
+  onShowToast?: (title: string, message: string, type: 'success' | 'info' | 'warning' | 'error') => void;
+}
 
-const AdminSystem: React.FC<Props> = ({ activeTab }) => {
+// Added onShowToast to component parameters
+const AdminSystem: React.FC<Props> = ({ activeTab, onShowToast }) => {
   const [activeCmsTab, setActiveCmsTab] = useState('news');
 
   // --- News State ---
@@ -90,6 +95,7 @@ const AdminSystem: React.FC<Props> = ({ activeTab }) => {
                 caption: file.name.split('.')[0]
             };
             setGalleryImages([newItem, ...galleryImages]);
+            if (onShowToast) onShowToast("Image Uploaded", "Gallery item added to homepage.", "success");
         };
         reader.readAsDataURL(file);
       }
@@ -98,6 +104,7 @@ const AdminSystem: React.FC<Props> = ({ activeTab }) => {
   const handleDeleteGalleryImage = (id: string) => {
       if(confirm('Delete this image?')) {
           setGalleryImages(prev => prev.filter(img => img.id !== id));
+          if (onShowToast) onShowToast("Image Deleted", "Gallery item removed.", "info");
       }
   };
 
@@ -115,6 +122,7 @@ const AdminSystem: React.FC<Props> = ({ activeTab }) => {
       setNewsItems([item, ...newsItems]);
       setIsNewsModalOpen(false);
       setNewNews({ title: '', content: '', date: new Date().toISOString().split('T')[0], type: 'ACADEMIC', sender: 'Admin', image: '' });
+      if (onShowToast) onShowToast("News Published", "The circular is now live on the board.", "success");
   };
 
   const handleSaveEvent = () => {
@@ -134,13 +142,14 @@ const AdminSystem: React.FC<Props> = ({ activeTab }) => {
     setEvents([event, ...events]);
     setIsEventModalOpen(false);
     setNewEvent({ title: '', description: '', date: '', time: '', location: '', category: 'WORKSHOP', registrationStatus: 'OPEN', organizer: 'Admin', image: '' });
+    if (onShowToast) onShowToast("Event Created", "New campus activity has been scheduled.", "success");
   };
 
   if (activeTab === 'cms') return (
     <div className="space-y-6 animate-in fade-in duration-500">
        <div className="flex justify-between items-center">
            <h2 className="text-2xl font-bold text-slate-900">Website CMS</h2>
-           <Button variant="outline"><Save className="w-4 h-4 mr-2"/> Publish Changes</Button>
+           <Button variant="outline" onClick={() => onShowToast && onShowToast("Changes Published", "Website front-end has been synchronized.", "success")}><Save className="w-4 h-4 mr-2"/> Publish Changes</Button>
        </div>
        
        <div className="flex gap-2 border-b border-slate-200 pb-1 overflow-x-auto">
@@ -205,7 +214,7 @@ const AdminSystem: React.FC<Props> = ({ activeTab }) => {
                           />
                       </div>
                       <div className="flex justify-end">
-                          <Button onClick={() => alert("Banner updated successfully!")} className="bg-indigo-600 hover:bg-indigo-700">
+                          <Button onClick={() => onShowToast && onShowToast("Success", "Banner configuration saved locally.", "success")} className="bg-indigo-600 hover:bg-indigo-700">
                               <Save className="w-4 h-4 mr-2"/> Save Banner Settings
                           </Button>
                       </div>
@@ -483,7 +492,7 @@ const AdminSystem: React.FC<Props> = ({ activeTab }) => {
                       <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-indigo-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
                    </label>
                </div>
-               <Button className="w-full mt-4"><Save className="w-4 h-4 mr-2"/> Save Changes</Button>
+               <Button className="w-full mt-4" onClick={() => onShowToast && onShowToast("Success", "System parameters updated.", "success")}><Save className="w-4 h-4 mr-2"/> Save Changes</Button>
            </div>
        </Card>
     </div>

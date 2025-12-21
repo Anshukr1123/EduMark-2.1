@@ -1,12 +1,11 @@
-
 import React from 'react';
 import { MOCK_COLLEGE_INFO } from '../../constants';
 import { GraduationCap, MapPin, Phone, Mail, Instagram, Twitter, Facebook, Linkedin } from 'lucide-react';
 
 export const Footer: React.FC = () => {
   return (
-    <footer id="contact" className="bg-slate-900 text-slate-300 py-16">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <footer id="contact" className="full-screen bg-slate-900 text-slate-300 justify-center">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full">
             <div className="grid md:grid-cols-4 gap-12 mb-12">
                 <div className="col-span-1 md:col-span-1">
                     <div className="flex items-center gap-2 text-white mb-6">

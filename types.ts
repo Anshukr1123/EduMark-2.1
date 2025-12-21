@@ -1,4 +1,3 @@
-
 export enum UserRole {
   STUDENT = 'STUDENT',
   TEACHER = 'TEACHER',
@@ -39,7 +38,7 @@ export interface AttendanceRecord {
   id: string;
   studentId: string;
   studentName: string;
-  subjectName?: string; // Added subject context
+  subjectName?: string;
   status: 'PRESENT' | 'ABSENT' | 'LATE';
   date: string;
 }
@@ -52,20 +51,19 @@ export interface Department {
   attendanceRate: number;
 }
 
-// --- New Types for Full SRS ---
-
 export interface Assignment {
   id: string;
   subject: string;
   title: string;
-  description?: string; // Added description
+  description?: string;
   dueDate: string;
   status: 'PENDING' | 'SUBMITTED' | 'GRADED' | 'OVERDUE';
   marks?: string;
-  maxMarks?: number; // Added max marks
-  feedback?: string; // Added feedback for graded assignments
-  submittedDate?: string; // Added submission date
-  fileUrl?: string; // Added file URL for submission
+  maxMarks?: number;
+  feedback?: string;
+  submittedDate?: string;
+  fileUrl?: string; // Optional field for assignment file links
+  complexity?: 'LOW' | 'MEDIUM' | 'HIGH';
 }
 
 export interface FeeRecord {
@@ -158,8 +156,6 @@ export interface CollegeEvent {
   registrationStatus: 'OPEN' | 'CLOSED' | 'REGISTERED';
   image?: string;
 }
-
-// --- SRS Phase 2 Additions ---
 
 export interface PlacementJob {
   id: string;

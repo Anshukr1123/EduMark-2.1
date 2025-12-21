@@ -6,9 +6,14 @@ import { Card, Button, Badge, Modal } from '../../components/UIComponents';
 import { Plus, CheckCheck, Calendar, RefreshCcw, Users, CheckCircle2, XCircle, Clock, Percent, Save, Loader2, BookOpen } from 'lucide-react';
 import { databases, isAppwriteConfigured, DATABASE_ID, COLLECTIONS, ID } from '../../appwriteClient';
 
-interface Props { user: User; }
+// Added onShowToast to Props interface
+interface Props { 
+  user: User; 
+  onShowToast?: (title: string, message: string, type: 'success' | 'info' | 'warning' | 'error') => void;
+}
 
-const TeacherAttendance: React.FC<Props> = () => {
+// Added user and onShowToast to component parameters
+const TeacherAttendance: React.FC<Props> = ({ user, onShowToast }) => {
   const [attendanceData, setAttendanceData] = useState<AttendanceRecord[]>(MOCK_ATTENDANCE_LIST);
   const [isAttendanceModalOpen, setIsAttendanceModalOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -83,6 +88,11 @@ const TeacherAttendance: React.FC<Props> = () => {
 
       setIsSaving(false);
       setIsAttendanceModalOpen(false);
+      
+      // Added success toast notification
+      if (onShowToast) {
+        onShowToast("Attendance Saved", `Records for ${selectedSubject} have been updated successfully.`, "success");
+      }
   };
 
   const total = attendanceData.length;

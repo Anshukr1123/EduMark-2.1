@@ -12,9 +12,14 @@ interface FeeStructure {
   frequency: string;
 }
 
-interface Props { activeTab: string; }
+// Added missing onShowToast to Props interface
+interface Props { 
+  activeTab: string; 
+  onShowToast?: (title: string, message: string, type: 'success' | 'info' | 'warning' | 'error') => void;
+}
 
-const AdminFinance: React.FC<Props> = ({ activeTab }) => {
+// Added onShowToast to component parameters
+const AdminFinance: React.FC<Props> = ({ activeTab, onShowToast }) => {
   // State for Fee Structure Management
   const [feeStructure, setFeeStructure] = useState<FeeStructure[]>([
     { id: '1', name: 'Semester Tuition Fee', amount: 45000, dueDate: '2024-01-15', frequency: 'Semester' },
@@ -38,11 +43,13 @@ const AdminFinance: React.FC<Props> = ({ activeTab }) => {
       setFeeStructure([...feeStructure, fee]);
       setIsFeeModalOpen(false);
       setNewFee({ name: '', amount: '', dueDate: '', frequency: 'Semester' });
+      if (onShowToast) onShowToast("Fee Added", "New institutional fee structure has been recorded.", "success");
   };
 
   const handleDeleteFee = (id: string) => {
       if(confirm('Are you sure you want to remove this fee type?')) {
           setFeeStructure(prev => prev.filter(f => f.id !== id));
+          if (onShowToast) onShowToast("Fee Removed", "Structure deleted from records.", "info");
       }
   };
 
@@ -128,7 +135,7 @@ const AdminFinance: React.FC<Props> = ({ activeTab }) => {
 
        <Card title="Recent Transactions">
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
+            <table className="w-full text-sm text-left">
                 <thead className="bg-slate-50 text-slate-500 uppercase text-xs">
                     <tr><th className="px-6 py-3">Transaction</th><th className="px-6 py-3">Date</th><th className="px-6 py-3">Amount</th><th className="px-6 py-3">Status</th></tr>
                 </thead>
@@ -206,7 +213,7 @@ const AdminFinance: React.FC<Props> = ({ activeTab }) => {
          {['Fee Collection Report', 'Outstanding Dues Report', 'Scholarship Disbursement', 'Expense Summary'].map(r => (
             <Card key={r} className="flex justify-between items-center hover:shadow-md transition-shadow">
                <span className="font-medium text-slate-700">{r}</span>
-               <Button size="sm" variant="secondary"><Download className="w-4 h-4"/></Button>
+               <Button size="sm" variant="secondary" onClick={() => onShowToast && onShowToast("Download Started", `Preparing ${r} for download...`, "info")}><Download className="w-4 h-4"/></Button>
             </Card>
          ))}
       </div>

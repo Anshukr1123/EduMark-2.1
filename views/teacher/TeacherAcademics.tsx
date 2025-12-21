@@ -1,13 +1,17 @@
+
 import React, { useState, useEffect } from 'react';
 import { User, Assignment, CourseMaterial } from '../../types';
 import { MOCK_ASSIGNMENTS, MOCK_COURSE_MATERIALS, MOCK_EXAM_DUTIES, MOCK_SUBJECTS } from '../../constants';
 import { Card, Button, Badge, Modal } from '../../components/UIComponents';
-// Added Clock icon to lucide-react imports to fix "Cannot find name 'Clock'"
-import { Plus, FileText, UploadCloud, Trash2, Video, Link as LinkIcon, File as FileIcon, Calendar, ArrowLeft, Download, Save, CheckCircle, Edit, MessageSquare, CheckCircle2, Search, Filter, X, Loader2, User as UserIcon, Clock } from 'lucide-react';
+import { Plus, FileText, UploadCloud, Trash2, Video, Link as LinkIcon, File as FileIcon, Calendar, ArrowLeft, Download, Save, CheckCircle, Edit, MessageSquare, CheckCircle2, Search, Filter, X, Loader2, User as UserIcon, Clock, Layers } from 'lucide-react';
 import TeacherQuizzes from './TeacherQuizzes';
 import { supabase, isSupabaseConfigured } from '../../supabaseClient';
 
-interface Props { user: User; activeTab: string; }
+interface Props { 
+  user: User; 
+  activeTab: string; 
+  onShowToast?: (title: string, message: string, type: 'success' | 'info' | 'warning' | 'error') => void;
+}
 
 interface Submission {
   id: string;
@@ -20,14 +24,20 @@ interface Submission {
   feedback: string;
 }
 
-const TeacherAcademics: React.FC<Props> = ({ activeTab }) => {
+const TeacherAcademics: React.FC<Props> = ({ user, activeTab, onShowToast }) => {
   const [assignments, setAssignments] = useState<Assignment[]>(MOCK_ASSIGNMENTS);
   const [materials, setMaterials] = useState<CourseMaterial[]>(MOCK_COURSE_MATERIALS);
 
   // Modal States
   const [isAssignmentModalOpen, setIsAssignmentModalOpen] = useState(false);
   const [isMaterialModalOpen, setIsMaterialModalOpen] = useState(false);
-  const [newAssignment, setNewAssignment] = useState({ title: '', subject: '', dueDate: '', maxMarks: 100 });
+  const [newAssignment, setNewAssignment] = useState<{
+    title: string;
+    subject: string;
+    dueDate: string;
+    maxMarks: number;
+    complexity: 'LOW' | 'MEDIUM' | 'HIGH';
+  }>({ title: '', subject: '', dueDate: '', maxMarks: 100, complexity: 'MEDIUM' });
   const [newMaterial, setNewMaterial] = useState({ title: '', subject: '', type: 'PDF' as const });
   const [isSaving, setIsSaving] = useState(false);
 
@@ -59,7 +69,8 @@ const TeacherAcademics: React.FC<Props> = ({ activeTab }) => {
             dueDate: d.due_date,
             status: d.status,
             maxMarks: d.max_marks,
-            description: d.description
+            description: d.description,
+            complexity: d.complexity || 'MEDIUM'
           }));
           setAssignments(mapped);
         }
@@ -80,6 +91,7 @@ const TeacherAcademics: React.FC<Props> = ({ activeTab }) => {
                 subject: newAssignment.subject,
                 due_date: newAssignment.dueDate,
                 max_marks: newAssignment.maxMarks,
+                complexity: newAssignment.complexity,
                 status: 'PENDING',
                 student_id: 's1', // For demo: assign to mock student Alice
                 description: 'New assignment created by teacher.'
@@ -94,14 +106,15 @@ const TeacherAcademics: React.FC<Props> = ({ activeTab }) => {
                     subject: data[0].subject,
                     dueDate: data[0].due_date,
                     status: data[0].status,
-                    maxMarks: data[0].max_marks
+                    maxMarks: data[0].max_marks,
+                    complexity: data[0].complexity
                 };
                 setAssignments([assign, ...assignments]);
             }
-            alert("Assignment published successfully.");
+            if (onShowToast) onShowToast("Assignment Created", "New task has been published successfully.", "success");
         } catch (error: any) {
             console.error("Error creating assignment:", error);
-            alert("Failed to create assignment.");
+            if (onShowToast) onShowToast("Error", "Failed to create assignment.", "error");
         }
     } else {
         const mock: Assignment = {
@@ -110,11 +123,12 @@ const TeacherAcademics: React.FC<Props> = ({ activeTab }) => {
           status: 'PENDING'
         };
         setAssignments([mock, ...assignments]);
+        if (onShowToast) onShowToast("Assignment Created", "New task has been published (Demo Mode).", "success");
     }
 
     setIsAssignmentModalOpen(false);
     setIsSaving(false);
-    setNewAssignment({ title: '', subject: '', dueDate: '', maxMarks: 100 });
+    setNewAssignment({ title: '', subject: '', dueDate: '', maxMarks: 100, complexity: 'MEDIUM' });
   };
 
   const openGrading = async (assignment: Assignment) => {
@@ -123,19 +137,18 @@ const TeacherAcademics: React.FC<Props> = ({ activeTab }) => {
       
       if (isSupabaseConfigured) {
           try {
-              // Fetch submissions where title matches
               const { data, error } = await supabase
                 .from('assignments')
                 .select('*')
                 .eq('title', assignment.title)
-                .neq('status', 'PENDING'); // Only show submitted or graded
+                .neq('status', 'PENDING');
 
               if (error) throw error;
 
               if (data) {
                   const mapped: Submission[] = data.map((d: any) => ({
                       id: d.id,
-                      studentName: 'Student Alice', // Mock name link
+                      studentName: 'Student Alice',
                       studentId: d.student_id,
                       submittedDate: d.submitted_date || 'N/A',
                       status: d.status,
@@ -149,7 +162,6 @@ const TeacherAcademics: React.FC<Props> = ({ activeTab }) => {
               console.error("Fetch submissions error:", e);
           }
       } else {
-          // Mock data if Supabase not configured
           setSubmissions([
             { id: 'sub1', studentName: 'Alice Johnson', studentId: 's1', submittedDate: '2023-10-14', status: 'SUBMITTED', fileUrl: 'assignment_v1.pdf', marks: '', feedback: '' },
             { id: 'sub2', studentName: 'Bob Smith', studentId: 's2', submittedDate: '2023-10-15', status: 'LATE', fileUrl: 'lab_report.pdf', marks: '', feedback: '' },
@@ -178,7 +190,7 @@ const TeacherAcademics: React.FC<Props> = ({ activeTab }) => {
               if (error) throw error;
           } catch (err) {
               console.error("Error updating grade:", err);
-              alert("Failed to save grade.");
+              if (onShowToast) onShowToast("Error", "Failed to save grade.", "error");
           }
       }
 
@@ -191,14 +203,14 @@ const TeacherAcademics: React.FC<Props> = ({ activeTab }) => {
       setIsSaving(false);
       setEditingSubmission(null);
       setGradeData({ marks: '', feedback: '' });
+      if (onShowToast) onShowToast("Grade Saved", "The student result has been recorded.", "success");
   };
 
-  // Added handleDeleteMaterial to fix "Cannot find name 'handleDeleteMaterial'"
   const handleDeleteMaterial = (id: string) => {
     setMaterials(prev => prev.filter(m => m.id !== id));
+    if (onShowToast) onShowToast("Material Deleted", "Study resource removed from library.", "info");
   };
 
-  // Added handleUploadMaterial to fix "Cannot find name 'handleUploadMaterial'"
   const handleUploadMaterial = () => {
     if (!newMaterial.title || !newMaterial.subject) return;
     const material: CourseMaterial = {
@@ -212,6 +224,16 @@ const TeacherAcademics: React.FC<Props> = ({ activeTab }) => {
     setMaterials([material, ...materials]);
     setIsMaterialModalOpen(false);
     setNewMaterial({ title: '', subject: '', type: 'PDF' });
+    if (onShowToast) onShowToast("Material Uploaded", "Resource is now available for students.", "success");
+  };
+
+  const getComplexityVariant = (complexity?: Assignment['complexity']) => {
+    switch (complexity) {
+        case 'HIGH': return 'error';
+        case 'MEDIUM': return 'warning';
+        case 'LOW': return 'success';
+        default: return 'neutral';
+    }
   };
 
   if (activeTab === 'internal_exams') {
@@ -249,6 +271,8 @@ const TeacherAcademics: React.FC<Props> = ({ activeTab }) => {
                                 <Calendar className="w-3.5 h-3.5 text-slate-400"/> Due: {selectedAssignment.dueDate}
                                 <span className="text-slate-300">|</span>
                                 <span>Max Marks: {selectedAssignment.maxMarks}</span>
+                                <span className="text-slate-300">|</span>
+                                <Badge variant={getComplexityVariant(selectedAssignment.complexity)} className="text-[10px] uppercase font-black border-none px-2">{selectedAssignment.complexity || 'MEDIUM'}</Badge>
                             </p>
                         </div>
                         <div className="w-full md:w-72">
@@ -416,10 +440,11 @@ const TeacherAcademics: React.FC<Props> = ({ activeTab }) => {
                         <FileText className="w-6 h-6" />
                     </div>
                     <div>
-                        <h3 className="font-bold text-lg text-slate-900 group-hover:text-indigo-600 transition-colors">{a.title}</h3>
+                        <h3 className="font-bold text-lg text-slate-900 group-hover:text-indigo-600 transition-colors uppercase tracking-tight">{a.title}</h3>
                         <div className="flex items-center gap-3 text-sm text-slate-500 mt-1">
-                            <span className="font-semibold bg-slate-100 px-2 py-0.5 rounded">{a.subject}</span>
+                            <span className="font-semibold bg-slate-100 px-2 py-0.5 rounded text-slate-700">{a.subject}</span>
                             <span className="flex items-center"><Calendar className="w-3 h-3 mr-1"/> Due: {a.dueDate}</span>
+                            <Badge variant={getComplexityVariant(a.complexity)} className="text-[9px] uppercase font-black px-2 py-0.5 border-none shadow-sm">{a.complexity || 'MEDIUM'}</Badge>
                         </div>
                     </div>
                  </div>
@@ -437,11 +462,11 @@ const TeacherAcademics: React.FC<Props> = ({ activeTab }) => {
              <div className="space-y-4">
                <div className="space-y-2">
                    <label className="text-sm font-bold text-slate-700">Assignment Title</label>
-                   <input placeholder="e.g. Chapter 4 Integration Practice" className="w-full border p-2.5 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none" onChange={e => setNewAssignment({...newAssignment, title: e.target.value})} />
+                   <input placeholder="e.g. Chapter 4 Integration Practice" className="w-full border p-2.5 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none" value={newAssignment.title} onChange={e => setNewAssignment({...newAssignment, title: e.target.value})} />
                </div>
                <div className="space-y-2">
                    <label className="text-sm font-bold text-slate-700">Subject</label>
-                   <select className="w-full border p-2.5 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none bg-white" onChange={e => setNewAssignment({...newAssignment, subject: e.target.value})}>
+                   <select className="w-full border p-2.5 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none bg-white" value={newAssignment.subject} onChange={e => setNewAssignment({...newAssignment, subject: e.target.value})}>
                        <option value="">Select Subject...</option>
                        {MOCK_SUBJECTS.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
                    </select>
@@ -449,11 +474,26 @@ const TeacherAcademics: React.FC<Props> = ({ activeTab }) => {
                <div className="grid grid-cols-2 gap-4">
                    <div className="space-y-2">
                        <label className="text-sm font-bold text-slate-700">Due Date</label>
-                       <input type="date" className="w-full border p-2.5 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none" onChange={e => setNewAssignment({...newAssignment, dueDate: e.target.value})} />
+                       <input type="date" className="w-full border p-2.5 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none" value={newAssignment.dueDate} onChange={e => setNewAssignment({...newAssignment, dueDate: e.target.value})} />
                    </div>
                    <div className="space-y-2">
                        <label className="text-sm font-bold text-slate-700">Max Marks</label>
-                       <input type="number" placeholder="100" className="w-full border p-2.5 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none" onChange={e => setNewAssignment({...newAssignment, maxMarks: parseInt(e.target.value)})} />
+                       <input type="number" placeholder="100" className="w-full border p-2.5 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none" value={newAssignment.maxMarks} onChange={e => setNewAssignment({...newAssignment, maxMarks: parseInt(e.target.value)})} />
+                   </div>
+               </div>
+               <div className="space-y-2">
+                   <label className="text-sm font-bold text-slate-700">Complexity Level</label>
+                   <div className="relative">
+                       <Layers className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
+                       <select 
+                           className="w-full pl-10 pr-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none bg-white" 
+                           value={newAssignment.complexity} 
+                           onChange={e => setNewAssignment({...newAssignment, complexity: e.target.value as any})}
+                       >
+                           <option value="LOW">Low - Basic Concepts</option>
+                           <option value="MEDIUM">Medium - Application & Analysis</option>
+                           <option value="HIGH">High - Advanced Implementation</option>
+                       </select>
                    </div>
                </div>
                <div className="pt-2">
@@ -488,7 +528,7 @@ const TeacherAcademics: React.FC<Props> = ({ activeTab }) => {
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex justify-between items-start">
-                        <h4 className="font-bold text-slate-900 truncate pr-4">{m.title}</h4>
+                        <h4 className="font-bold text-slate-900 truncate pr-4 uppercase tracking-tight">{m.title}</h4>
                         <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                              <Button size="sm" variant="outline" className="h-8">View</Button>
                              <button onClick={() => handleDeleteMaterial(m.id)} className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all">
@@ -553,14 +593,14 @@ const TeacherAcademics: React.FC<Props> = ({ activeTab }) => {
            {MOCK_EXAM_DUTIES.map(d => (
              <Card key={d.id} className="flex items-center justify-between border-l-4 border-l-indigo-600">
                 <div>
-                    <h3 className="font-bold text-lg text-slate-900">{d.examName}</h3>
+                    <h3 className="font-bold text-lg text-slate-900 uppercase tracking-tight">{d.examName}</h3>
                     <div className="flex items-center text-sm text-slate-500 mt-1 gap-3 font-medium">
                         <span className="flex items-center"><Calendar className="w-3.5 h-3.5 mr-1.5"/> {d.date}</span>
                         <span className="flex items-center"><Clock className="w-3.5 h-3.5 mr-1.5"/> {d.time}</span>
                         <span className="flex items-center"><FileText className="w-3.5 h-3.5 mr-1.5"/> Room: {d.room}</span>
                     </div>
                 </div>
-                <Badge variant="neutral" className="bg-indigo-50 text-indigo-700 border-indigo-100 font-bold">{d.role}</Badge>
+                <Badge variant="neutral" className="bg-indigo-50 text-indigo-700 border-indigo-100 font-bold uppercase tracking-widest text-[10px] px-3">{d.role}</Badge>
              </Card>
            ))}
         </div>
