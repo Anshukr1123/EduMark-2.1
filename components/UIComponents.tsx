@@ -1,5 +1,5 @@
 
-import React, { ReactNode } from 'react';
+import React, { ReactNode, memo } from 'react';
 import { Loader2, X, CheckCircle, AlertTriangle, Info, XCircle } from 'lucide-react';
 
 // --- Button ---
@@ -9,7 +9,7 @@ interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   isLoading?: boolean;
 }
 
-export const Button: React.FC<ButtonProps> = ({ 
+export const Button: React.FC<ButtonProps> = memo(({ 
   children, 
   variant = 'primary', 
   size = 'md',
@@ -43,7 +43,7 @@ export const Button: React.FC<ButtonProps> = ({
       {children}
     </button>
   );
-};
+});
 
 // --- Card ---
 interface CardProps extends React.HTMLAttributes<HTMLDivElement> {
@@ -51,7 +51,7 @@ interface CardProps extends React.HTMLAttributes<HTMLDivElement> {
   title?: string;
 }
 
-export const Card: React.FC<CardProps> = ({ children, className = '', title, ...props }) => (
+export const Card: React.FC<CardProps> = memo(({ children, className = '', title, ...props }) => (
   <div className={`rounded-xl border border-slate-200 bg-white text-slate-950 shadow-sm transition-all duration-200 hover:shadow-md ${className}`} {...props}>
     {title && (
       <div className="flex flex-col space-y-1.5 p-6 pb-2">
@@ -60,10 +60,10 @@ export const Card: React.FC<CardProps> = ({ children, className = '', title, ...
     )}
     <div className="p-6 pt-2">{children}</div>
   </div>
-);
+));
 
 // --- Badge ---
-export const Badge: React.FC<{ children: ReactNode; variant?: 'success' | 'warning' | 'neutral' | 'error'; className?: string }> = ({ children, variant = 'neutral', className = '' }) => {
+export const Badge: React.FC<{ children: ReactNode; variant?: 'success' | 'warning' | 'neutral' | 'error'; className?: string }> = memo(({ children, variant = 'neutral', className = '' }) => {
   const styles = {
     success: "bg-green-100 text-green-800 border border-green-200",
     warning: "bg-yellow-100 text-yellow-800 border border-yellow-200",
@@ -75,7 +75,7 @@ export const Badge: React.FC<{ children: ReactNode; variant?: 'success' | 'warni
       {children}
     </span>
   );
-};
+});
 
 // --- Modal ---
 interface ModalProps {
@@ -112,7 +112,7 @@ export interface ToastProps {
   onClose: (id: string) => void;
 }
 
-export const Toast: React.FC<ToastProps> = ({ id, title, message, type, onClose }) => {
+export const Toast: React.FC<ToastProps> = memo(({ id, title, message, type, onClose }) => {
   const icons = {
     success: <CheckCircle className="w-5 h-5 text-green-500" />,
     error: <XCircle className="w-5 h-5 text-red-500" />,
@@ -146,4 +146,4 @@ export const Toast: React.FC<ToastProps> = ({ id, title, message, type, onClose 
       </div>
     </div>
   );
-};
+});

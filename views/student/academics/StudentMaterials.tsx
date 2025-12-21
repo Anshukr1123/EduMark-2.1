@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { MOCK_COURSE_MATERIALS } from '../../../constants';
 import { Subject } from '../../../types';
 import { Card, Button } from '../../../components/UIComponents';
-import { Download, Video, Link as LinkIcon, File as FileIcon, Filter, Search } from 'lucide-react';
+import { Download, Video, Link as LinkIcon, File as FileIcon, Filter, Search, X } from 'lucide-react';
 
 interface Props { 
   isOnline: boolean;
@@ -33,15 +33,24 @@ const StudentMaterials: React.FC<Props> = ({ isOnline, subjects }) => {
 
       {/* Filters & Search */}
       <div className="flex flex-col md:flex-row gap-4 items-center">
-        <div className="relative w-full md:w-64">
+        <div className="relative w-full md:w-80">
            <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
            <input 
              type="text" 
-             placeholder="Search materials..." 
-             className="pl-9 pr-4 py-2 w-full border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+             placeholder="Search by title or subject..." 
+             className="pl-9 pr-10 py-2 w-full border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
              value={searchQuery}
              onChange={(e) => setSearchQuery(e.target.value)}
            />
+           {searchQuery && (
+             <button 
+               onClick={() => setSearchQuery('')}
+               className="absolute right-3 top-2.5 text-slate-400 hover:text-indigo-600 transition-colors"
+               title="Clear search"
+             >
+               <X className="w-4 h-4" />
+             </button>
+           )}
         </div>
         <div className="flex-1 w-full overflow-x-auto pb-2 md:pb-0">
            <div className="flex gap-2">
@@ -64,7 +73,24 @@ const StudentMaterials: React.FC<Props> = ({ isOnline, subjects }) => {
         </div>
       </div>
 
-      {selectedSubject === 'ALL' && (
+      {/* Search results info */}
+      {(searchQuery || selectedSubject !== 'ALL') && (
+        <div className="flex items-center justify-between text-xs text-slate-500 px-1">
+          <p>
+            Showing <span className="font-bold text-indigo-600">{filteredMaterials.length}</span> materials 
+            {searchQuery && <span> matching "<span className="font-medium">{searchQuery}</span>"</span>}
+            {selectedSubject !== 'ALL' && <span> in <span className="font-medium">{selectedSubject}</span></span>}
+          </p>
+          <button 
+            onClick={() => { setSelectedSubject('ALL'); setSearchQuery(''); }}
+            className="text-indigo-600 hover:underline font-bold"
+          >
+            Reset All Filters
+          </button>
+        </div>
+      )}
+
+      {selectedSubject === 'ALL' && !searchQuery && (
          <Card className="bg-gradient-to-r from-indigo-50 to-blue-50 border-indigo-100">
             <div className="flex justify-between items-center">
                 <div>

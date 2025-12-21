@@ -1,14 +1,17 @@
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Assignment } from '../../../types';
 import { Card, Button, Badge, Modal } from '../../../components/UIComponents';
-import { UploadCloud, Clock, Plus, Calendar, FileText, CheckCircle, AlertCircle, File, Download, Paperclip, CheckCircle2 } from 'lucide-react';
+import { UploadCloud, Clock, Plus, Calendar, FileText, CheckCircle, AlertCircle, File, Download, Paperclip, CheckCircle2, Filter, ArrowUpDown, ChevronDown, BookOpen } from 'lucide-react';
 import { account, storage, databases, isAppwriteConfigured, DATABASE_ID, COLLECTIONS, BUCKET_ID, ID } from '../../../appwriteClient';
 
 interface Props {
   assignments: Assignment[];
   setAssignments: React.Dispatch<React.SetStateAction<Assignment[]>>;
 }
+
+type FilterStatus = 'ALL' | Assignment['status'];
+type SortKey = 'DUE_DATE' | 'SUBJECT';
 
 const StudentAssignments: React.FC<Props> = ({ assignments, setAssignments }) => {
   const [selectedAssignment, setSelectedAssignment] = useState<Assignment | null>(null);
@@ -23,6 +26,10 @@ const StudentAssignments: React.FC<Props> = ({ assignments, setAssignments }) =>
   // State for Feedback Modal
   const [isFeedbackModalOpen, setIsFeedbackModalOpen] = useState(false);
   const [feedbackAssignment, setFeedbackAssignment] = useState<Assignment | null>(null);
+
+  // Filtering & Sorting State
+  const [filterStatus, setFilterStatus] = useState<FilterStatus>('ALL');
+  const [sortBy, setSortBy] = useState<SortKey>('DUE_DATE');
 
   const handleCreateAssignment = () => {
     const newId = Math.random().toString(36).substr(2, 9);
@@ -78,16 +85,13 @@ const StudentAssignments: React.FC<Props> = ({ assignments, setAssignments }) =>
         } catch (error: any) {
             console.error("Submission error:", error);
             alert("Error submitting assignment: " + error.message);
-            // Fallback for demo UX so it doesn't just hang
             fileUrl = "(Local Demo) " + submissionFile.name;
         }
     } else {
-        // Mock delay for offline
         await new Promise(resolve => setTimeout(resolve, 1500));
         alert("Assignment Submitted Locally (Demo Mode)");
     }
 
-    // 3. Update Local State
     setAssignments(prev => prev.map(a => a.id === selectedAssignment.id ? { 
         ...a, 
         status: 'SUBMITTED',
@@ -114,6 +118,35 @@ const StudentAssignments: React.FC<Props> = ({ assignments, setAssignments }) =>
     }
   };
 
+  // Process Assignments: Filter -> Sort
+  const processedAssignments = useMemo(() => {
+    let result = assignments;
+
+    // Filter
+    if (filterStatus !== 'ALL') {
+      result = result.filter(a => a.status === filterStatus);
+    }
+
+    // Sort
+    result = [...result].sort((a, b) => {
+      if (sortBy === 'DUE_DATE') {
+        return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
+      } else {
+        return a.subject.localeCompare(b.subject);
+      }
+    });
+
+    return result;
+  }, [assignments, filterStatus, sortBy]);
+
+  const filterOptions: { label: string; value: FilterStatus }[] = [
+    { label: 'All', value: 'ALL' },
+    { label: 'Pending', value: 'PENDING' },
+    { label: 'Submitted', value: 'SUBMITTED' },
+    { label: 'Graded', value: 'GRADED' },
+    { label: 'Overdue', value: 'OVERDUE' },
+  ];
+
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -128,9 +161,64 @@ const StudentAssignments: React.FC<Props> = ({ assignments, setAssignments }) =>
           </Button>
        </div>
 
+       {/* Toolbar: Filters & Sort */}
+       <div className="bg-white p-3 rounded-2xl border border-slate-200 shadow-sm flex flex-col md:flex-row gap-4 items-center justify-between">
+          <div className="flex items-center gap-2 overflow-x-auto w-full md:w-auto pb-2 md:pb-0 scrollbar-none">
+             <div className="flex items-center gap-2 text-slate-400 mr-2 shrink-0">
+                <Filter className="w-4 h-4" />
+                <span className="text-[10px] font-black uppercase tracking-widest">Filter</span>
+             </div>
+             {filterOptions.map((opt) => (
+                <button
+                   key={opt.value}
+                   onClick={() => setFilterStatus(opt.value)}
+                   className={`px-4 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-all ${
+                      filterStatus === opt.value 
+                      ? 'bg-indigo-600 text-white shadow-md shadow-indigo-200' 
+                      : 'bg-slate-50 text-slate-500 hover:bg-slate-100 hover:text-slate-700 border border-slate-100'
+                   }`}
+                >
+                   {opt.label}
+                </button>
+             ))}
+          </div>
+
+          <div className="flex items-center gap-3 w-full md:w-auto shrink-0 border-t md:border-t-0 pt-3 md:pt-0 border-slate-100">
+             <div className="flex items-center gap-2 text-slate-400 mr-1">
+                <ArrowUpDown className="w-4 h-4" />
+                <span className="text-[10px] font-black uppercase tracking-widest">Sort</span>
+             </div>
+             <select 
+                value={sortBy} 
+                onChange={(e) => setSortBy(e.target.value as SortKey)}
+                className="bg-slate-50 border border-slate-200 text-slate-700 text-xs font-bold rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all appearance-none pr-8 relative cursor-pointer"
+             >
+                <option value="DUE_DATE">Due Date (Soonest)</option>
+                <option value="SUBJECT">Subject Name</option>
+             </select>
+          </div>
+       </div>
+
+       {/* Results Summary */}
+       {(filterStatus !== 'ALL' || sortBy !== 'DUE_DATE') && (
+          <div className="flex items-center justify-between px-1">
+              <p className="text-xs text-slate-500">
+                 Showing <span className="font-bold text-indigo-600">{processedAssignments.length}</span> assignments 
+                 {filterStatus !== 'ALL' && <span> with status "<span className="font-medium">{filterStatus}</span>"</span>}
+                 {sortBy !== 'DUE_DATE' && <span> sorted by <span className="font-medium">{sortBy.toLowerCase().replace('_', ' ')}</span></span>}
+              </p>
+              <button 
+                onClick={() => { setFilterStatus('ALL'); setSortBy('DUE_DATE'); }}
+                className="text-[10px] font-black text-indigo-600 uppercase tracking-widest hover:underline"
+              >
+                Reset
+              </button>
+          </div>
+       )}
+
        <div className="grid gap-6">
-          {assignments.map(assign => (
-             <Card key={assign.id} className="group hover:border-indigo-200 transition-all shadow-sm hover:shadow-md">
+          {processedAssignments.map(assign => (
+             <Card key={assign.id} className="group hover:border-indigo-200 transition-all shadow-sm hover:shadow-md animate-in slide-in-from-top-2 duration-300">
                 <div className="flex flex-col md:flex-row gap-6">
                     {/* Status Indicator Bar */}
                     <div className={`hidden md:block w-1.5 self-stretch rounded-full ${assign.status === 'GRADED' ? 'bg-green-500' : assign.status === 'OVERDUE' ? 'bg-red-500' : assign.status === 'SUBMITTED' ? 'bg-indigo-500' : 'bg-yellow-500'}`}></div>
@@ -144,7 +232,9 @@ const StudentAssignments: React.FC<Props> = ({ assignments, setAssignments }) =>
                                     {assign.status === 'OVERDUE' && <AlertCircle className="w-4 h-4 text-red-500"/>}
                                 </h3>
                                 <div className="flex flex-wrap items-center gap-3 text-xs font-medium text-slate-500 mt-1">
-                                    <span className="bg-slate-100 px-2 py-0.5 rounded text-slate-700">{assign.subject}</span>
+                                    <span className="bg-slate-100 px-2 py-0.5 rounded text-slate-700 flex items-center gap-1">
+                                       <BookOpen className="w-3 h-3" /> {assign.subject}
+                                    </span>
                                     <span>•</span>
                                     <span className="flex items-center"><Calendar className="w-3 h-3 mr-1"/> Due: {assign.dueDate}</span>
                                     {assign.submittedDate && (
@@ -192,7 +282,7 @@ const StudentAssignments: React.FC<Props> = ({ assignments, setAssignments }) =>
                             </div>
                         )}
 
-                        {/* Actions Footer (Hidden if Graded, as we show the result card instead) */}
+                        {/* Actions Footer */}
                         {assign.status !== 'GRADED' && (
                             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center pt-2 gap-4">
                                  <div className="flex gap-4">
@@ -220,10 +310,22 @@ const StudentAssignments: React.FC<Props> = ({ assignments, setAssignments }) =>
                 </div>
              </Card>
           ))}
+          
+          {processedAssignments.length === 0 && (
+             <div className="flex flex-col items-center justify-center py-20 bg-slate-50 rounded-3xl border border-dashed border-slate-200">
+                <div className="p-4 bg-white rounded-full shadow-sm mb-4">
+                   <FileText className="w-10 h-10 text-slate-300" />
+                </div>
+                <h3 className="text-lg font-bold text-slate-800">No assignments found</h3>
+                <p className="text-sm text-slate-500 mt-1 max-w-xs text-center">Try changing your filter or add a personal task to get started.</p>
+                <Button variant="outline" size="sm" className="mt-6" onClick={() => { setFilterStatus('ALL'); setSortBy('DUE_DATE'); }}>Clear All Filters</Button>
+             </div>
+          )}
        </div>
 
        {/* Submit Modal */}
-       <Modal isOpen={isSubmitModalOpen} onClose={() => setIsSubmitModalOpen(false)} title={`Submit Assignment`}>
+       {/* Fixed Error: Changed isProcessingPayment to isSubmitting in the onClose handler */}
+       <Modal isOpen={isSubmitModalOpen} onClose={() => !isSubmitting && setIsSubmitModalOpen(false)} title={`Submit Assignment`}>
          <form onSubmit={handleAssignmentSubmit} className="space-y-4">
             <div className="bg-slate-50 p-4 rounded-lg border border-slate-100 mb-4">
                <h4 className="font-bold text-slate-900 mb-2">{selectedAssignment?.title}</h4>

@@ -1,11 +1,11 @@
-
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { User, Assignment, CourseMaterial } from '../../types';
 import { MOCK_ASSIGNMENTS, MOCK_COURSE_MATERIALS, MOCK_EXAM_DUTIES, MOCK_SUBJECTS } from '../../constants';
 import { Card, Button, Badge, Modal } from '../../components/UIComponents';
-import { Plus, FileText, UploadCloud, Trash2, Video, Link as LinkIcon, File as FileIcon, Calendar, ArrowLeft, Download, Save, CheckCircle, Edit, MessageSquare, CheckCircle2, Search, Filter, X, Loader2 } from 'lucide-react';
+// Added Clock icon to lucide-react imports to fix "Cannot find name 'Clock'"
+import { Plus, FileText, UploadCloud, Trash2, Video, Link as LinkIcon, File as FileIcon, Calendar, ArrowLeft, Download, Save, CheckCircle, Edit, MessageSquare, CheckCircle2, Search, Filter, X, Loader2, User as UserIcon, Clock } from 'lucide-react';
 import TeacherQuizzes from './TeacherQuizzes';
-import { databases, isAppwriteConfigured, DATABASE_ID, COLLECTIONS, ID, Query } from '../../appwriteClient';
+import { supabase, isSupabaseConfigured } from '../../supabaseClient';
 
 interface Props { user: User; activeTab: string; }
 
@@ -14,18 +14,11 @@ interface Submission {
   studentName: string;
   studentId: string;
   submittedDate: string;
-  status: 'PENDING' | 'GRADED' | 'LATE';
+  status: 'PENDING' | 'SUBMITTED' | 'GRADED' | 'LATE';
   fileUrl: string;
   marks: string;
   feedback: string;
 }
-
-const MOCK_SUBMISSIONS: Submission[] = [
-  { id: 'sub1', studentName: 'Alice Johnson', studentId: 'S101', submittedDate: '2023-10-14', status: 'PENDING', fileUrl: 'assignment_v1.pdf', marks: '', feedback: '' },
-  { id: 'sub2', studentName: 'Bob Smith', studentId: 'S102', submittedDate: '2023-10-15', status: 'LATE', fileUrl: 'lab_report_final.docx', marks: '', feedback: '' },
-  { id: 'sub3', studentName: 'Charlie Brown', studentId: 'S103', submittedDate: '2023-10-12', status: 'GRADED', fileUrl: 'project_code.zip', marks: '18/20', feedback: 'Great work on the logic. Code structure is clean and well commented.' },
-  { id: 'sub4', studentName: 'Diana Prince', studentId: 'S104', submittedDate: '2023-10-13', status: 'PENDING', fileUrl: 'analysis.pdf', marks: '', feedback: '' },
-];
 
 const TeacherAcademics: React.FC<Props> = ({ activeTab }) => {
   const [assignments, setAssignments] = useState<Assignment[]>(MOCK_ASSIGNMENTS);
@@ -40,120 +33,130 @@ const TeacherAcademics: React.FC<Props> = ({ activeTab }) => {
 
   // Grading State
   const [selectedAssignment, setSelectedAssignment] = useState<Assignment | null>(null);
-  const [submissions, setSubmissions] = useState<Submission[]>(MOCK_SUBMISSIONS);
+  const [submissions, setSubmissions] = useState<Submission[]>([]);
+  const [isLoadingSubmissions, setIsLoadingSubmissions] = useState(false);
   const [editingSubmission, setEditingSubmission] = useState<string | null>(null);
   const [gradeData, setGradeData] = useState({ marks: '', feedback: '' });
   const [submissionFilter, setSubmissionFilter] = useState<'ALL' | 'PENDING' | 'GRADED'>('ALL');
   const [searchTerm, setSearchTerm] = useState('');
 
+  // Fetch assignments from Supabase on mount
+  useEffect(() => {
+    const fetchAssignments = async () => {
+      if (!isSupabaseConfigured) return;
+      try {
+        const { data, error } = await supabase
+          .from('assignments')
+          .select('*')
+          .order('due_date', { ascending: false });
+        
+        if (error) throw error;
+        if (data && data.length > 0) {
+          const mapped: Assignment[] = data.map(d => ({
+            id: d.id,
+            title: d.title,
+            subject: d.subject,
+            dueDate: d.due_date,
+            status: d.status,
+            maxMarks: d.max_marks,
+            description: d.description
+          }));
+          setAssignments(mapped);
+        }
+      } catch (err) {
+        console.error("Error fetching assignments:", err);
+      }
+    };
+    fetchAssignments();
+  }, []);
+
   const handleCreateAssignment = async () => {
     setIsSaving(true);
-    const newId = Math.random().toString();
     
-    // 1. Local Update
-    const assign: Assignment = {
-      id: newId,
-      title: newAssignment.title,
-      subject: newAssignment.subject,
-      dueDate: newAssignment.dueDate,
-      status: 'PENDING',
-      maxMarks: newAssignment.maxMarks
-    };
-    
-    // 2. Appwrite Update
-    if (isAppwriteConfigured) {
+    if (isSupabaseConfigured) {
         try {
-            // For demo purposes, we assign this to the mock student 's1' (Alice)
-            // In a real app, you would iterate through a list of student IDs in a class
-            await databases.createDocument(
-                DATABASE_ID,
-                COLLECTIONS.ASSIGNMENTS,
-                ID.unique(),
-                {
-                    title: newAssignment.title,
-                    subject: newAssignment.subject,
-                    due_date: newAssignment.dueDate,
-                    max_marks: newAssignment.maxMarks,
-                    status: 'PENDING',
-                    student_id: 's1', // Hardcoded to ensure visibility in Student View
-                    description: 'New assignment created by teacher.'
-                }
-            );
-            alert("Assignment published to Student Portal (Alice).");
+            const { data, error } = await supabase.from('assignments').insert({
+                title: newAssignment.title,
+                subject: newAssignment.subject,
+                due_date: newAssignment.dueDate,
+                max_marks: newAssignment.maxMarks,
+                status: 'PENDING',
+                student_id: 's1', // For demo: assign to mock student Alice
+                description: 'New assignment created by teacher.'
+            }).select();
+
+            if (error) throw error;
+            
+            if (data) {
+                const assign: Assignment = {
+                    id: data[0].id,
+                    title: data[0].title,
+                    subject: data[0].subject,
+                    dueDate: data[0].due_date,
+                    status: data[0].status,
+                    maxMarks: data[0].max_marks
+                };
+                setAssignments([assign, ...assignments]);
+            }
+            alert("Assignment published successfully.");
         } catch (error: any) {
             console.error("Error creating assignment:", error);
-            alert("Failed to sync with database, but added locally.");
+            alert("Failed to create assignment.");
         }
     } else {
-        // Simulate delay
-        await new Promise(resolve => setTimeout(resolve, 800));
+        const mock: Assignment = {
+          id: Math.random().toString(),
+          ...newAssignment,
+          status: 'PENDING'
+        };
+        setAssignments([mock, ...assignments]);
     }
 
-    setAssignments([...assignments, assign]);
     setIsAssignmentModalOpen(false);
     setIsSaving(false);
     setNewAssignment({ title: '', subject: '', dueDate: '', maxMarks: 100 });
   };
 
-  const handleUploadMaterial = () => {
-    const mat: CourseMaterial = {
-      id: Math.random().toString(),
-      title: newMaterial.title,
-      subject: newMaterial.subject || 'General',
-      type: newMaterial.type,
-      date: new Date().toISOString().split('T')[0],
-      url: '#'
-    };
-    setMaterials([mat, ...materials]);
-    setIsMaterialModalOpen(false);
-    setNewMaterial({ title: '', subject: '', type: 'PDF' }); // Reset form
-  };
-
-  const handleDeleteMaterial = (id: string) => {
-      if(window.confirm('Are you sure you want to delete this material?')) {
-          setMaterials(materials.filter(m => m.id !== id));
-      }
-  }
-
   const openGrading = async (assignment: Assignment) => {
       setSelectedAssignment(assignment);
+      setIsLoadingSubmissions(true);
       
-      if (isAppwriteConfigured) {
-          // Fetch real submissions for this assignment title/subject from DB
+      if (isSupabaseConfigured) {
           try {
-              const response = await databases.listDocuments(
-                  DATABASE_ID,
-                  COLLECTIONS.ASSIGNMENTS,
-                  [
-                      Query.equal('title', assignment.title),
-                      Query.notEqual('status', 'PENDING') // Get submitted/graded ones
-                  ]
-              );
+              // Fetch submissions where title matches
+              const { data, error } = await supabase
+                .from('assignments')
+                .select('*')
+                .eq('title', assignment.title)
+                .neq('status', 'PENDING'); // Only show submitted or graded
 
-              if (response.documents.length > 0) {
-                  const mappedSubmissions: Submission[] = response.documents.map((d: any) => ({
-                      id: d.$id,
-                      studentName: 'Student', // In real app, join with profiles
+              if (error) throw error;
+
+              if (data) {
+                  const mapped: Submission[] = data.map((d: any) => ({
+                      id: d.id,
+                      studentName: 'Student Alice', // Mock name link
                       studentId: d.student_id,
-                      submittedDate: d.submitted_date || d.due_date,
+                      submittedDate: d.submitted_date || 'N/A',
                       status: d.status,
-                      fileUrl: d.file_url || 'No file',
-                      marks: d.marks || '',
+                      fileUrl: d.file_url || '',
+                      marks: d.marks?.toString() || '',
                       feedback: d.feedback || ''
                   }));
-                  setSubmissions(mappedSubmissions);
-              } else {
-                  // Fallback if no real data found
-                  setSubmissions(MOCK_SUBMISSIONS); 
+                  setSubmissions(mapped);
               }
           } catch (e) {
               console.error("Fetch submissions error:", e);
-              setSubmissions(MOCK_SUBMISSIONS);
           }
       } else {
-          setSubmissions(MOCK_SUBMISSIONS);
+          // Mock data if Supabase not configured
+          setSubmissions([
+            { id: 'sub1', studentName: 'Alice Johnson', studentId: 's1', submittedDate: '2023-10-14', status: 'SUBMITTED', fileUrl: 'assignment_v1.pdf', marks: '', feedback: '' },
+            { id: 'sub2', studentName: 'Bob Smith', studentId: 's2', submittedDate: '2023-10-15', status: 'LATE', fileUrl: 'lab_report.pdf', marks: '', feedback: '' },
+          ]);
       }
       
+      setIsLoadingSubmissions(false);
       setSubmissionFilter('ALL');
       setSearchTerm('');
   };
@@ -161,21 +164,21 @@ const TeacherAcademics: React.FC<Props> = ({ activeTab }) => {
   const handleSaveGrade = async (submissionId: string) => {
       setIsSaving(true);
       
-      if (isAppwriteConfigured) {
+      if (isSupabaseConfigured) {
           try {
-              await databases.updateDocument(
-                  DATABASE_ID,
-                  COLLECTIONS.ASSIGNMENTS,
-                  submissionId,
-                  {
+              const { error } = await supabase
+                  .from('assignments')
+                  .update({
                       status: 'GRADED',
-                      marks: gradeData.marks,
+                      marks: parseFloat(gradeData.marks),
                       feedback: gradeData.feedback
-                  }
-              );
+                  })
+                  .eq('id', submissionId);
+              
+              if (error) throw error;
           } catch (err) {
               console.error("Error updating grade:", err);
-              alert("Failed to save grade to database.");
+              alert("Failed to save grade.");
           }
       }
 
@@ -190,6 +193,27 @@ const TeacherAcademics: React.FC<Props> = ({ activeTab }) => {
       setGradeData({ marks: '', feedback: '' });
   };
 
+  // Added handleDeleteMaterial to fix "Cannot find name 'handleDeleteMaterial'"
+  const handleDeleteMaterial = (id: string) => {
+    setMaterials(prev => prev.filter(m => m.id !== id));
+  };
+
+  // Added handleUploadMaterial to fix "Cannot find name 'handleUploadMaterial'"
+  const handleUploadMaterial = () => {
+    if (!newMaterial.title || !newMaterial.subject) return;
+    const material: CourseMaterial = {
+      id: Math.random().toString(),
+      title: newMaterial.title,
+      subject: newMaterial.subject,
+      type: newMaterial.type,
+      date: new Date().toISOString().split('T')[0],
+      url: '#'
+    };
+    setMaterials([material, ...materials]);
+    setIsMaterialModalOpen(false);
+    setNewMaterial({ title: '', subject: '', type: 'PDF' });
+  };
+
   if (activeTab === 'internal_exams') {
       return <TeacherQuizzes />;
   }
@@ -199,7 +223,7 @@ const TeacherAcademics: React.FC<Props> = ({ activeTab }) => {
           const filteredSubmissions = submissions.filter(s => {
               const matchesFilter = submissionFilter === 'ALL' 
                   ? true 
-                  : submissionFilter === 'GRADED' ? s.status === 'GRADED' : (s.status === 'PENDING' || s.status === 'LATE');
+                  : submissionFilter === 'GRADED' ? s.status === 'GRADED' : s.status !== 'GRADED';
               const matchesSearch = s.studentName.toLowerCase().includes(searchTerm.toLowerCase()) || s.studentId.toLowerCase().includes(searchTerm.toLowerCase());
               return matchesFilter && matchesSearch;
           });
@@ -210,42 +234,44 @@ const TeacherAcademics: React.FC<Props> = ({ activeTab }) => {
 
           return (
             <div className="space-y-6 animate-in fade-in duration-500">
-                {/* Header with Back and Summary */}
                 <div className="flex flex-col gap-4">
                     <Button variant="outline" size="sm" onClick={() => setSelectedAssignment(null)} className="w-fit">
                         <ArrowLeft className="w-4 h-4 mr-2" /> Back to Assignments
                     </Button>
+                    
                     <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
-                        <div>
-                            <h2 className="text-2xl font-bold text-slate-900">{selectedAssignment.title}</h2>
+                        <div className="flex-1">
+                            <div className="flex items-center gap-3">
+                                <h2 className="text-2xl font-bold text-slate-900">{selectedAssignment.title}</h2>
+                                <Badge variant="neutral" className="bg-indigo-50 text-indigo-700 border-none">{selectedAssignment.subject}</Badge>
+                            </div>
                             <p className="text-sm text-slate-500 mt-1 flex items-center gap-2">
-                                <span className="bg-slate-100 px-2 py-0.5 rounded">{selectedAssignment.subject}</span>
-                                <span>•</span>
-                                <Calendar className="w-3 h-3 text-slate-400"/> Due: {selectedAssignment.dueDate}
+                                <Calendar className="w-3.5 h-3.5 text-slate-400"/> Due: {selectedAssignment.dueDate}
+                                <span className="text-slate-300">|</span>
+                                <span>Max Marks: {selectedAssignment.maxMarks}</span>
                             </p>
                         </div>
-                        <div className="w-full md:w-64">
-                            <div className="flex justify-between text-xs font-semibold text-slate-600 mb-1">
+                        <div className="w-full md:w-72">
+                            <div className="flex justify-between text-xs font-bold text-slate-500 mb-1.5 uppercase tracking-wider">
                                 <span>Grading Progress</span>
-                                <span>{gradedCount}/{totalCount}</span>
+                                <span className="text-indigo-600">{gradedCount} of {totalCount} Done</span>
                             </div>
-                            <div className="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden">
-                                <div className="h-full bg-indigo-600 rounded-full transition-all duration-500" style={{width: `${progress}%`}}></div>
+                            <div className="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden shadow-inner">
+                                <div className="h-full bg-indigo-600 rounded-full transition-all duration-700 ease-out" style={{width: `${progress}%`}}></div>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                {/* Filters and Search */}
                 <div className="flex flex-col sm:flex-row gap-4 justify-between items-center">
-                    <div className="flex bg-slate-100 p-1 rounded-lg border border-slate-200">
+                    <div className="flex bg-slate-100 p-1 rounded-lg border border-slate-200 w-full sm:w-auto">
                         {(['ALL', 'PENDING', 'GRADED'] as const).map(f => (
                             <button
                                 key={f}
                                 onClick={() => setSubmissionFilter(f)}
-                                className={`px-4 py-1.5 rounded-md text-xs font-bold transition-all ${submissionFilter === f ? 'bg-white shadow text-indigo-600' : 'text-slate-500 hover:text-slate-700'}`}
+                                className={`flex-1 sm:flex-none px-4 py-1.5 rounded-md text-xs font-bold transition-all ${submissionFilter === f ? 'bg-white shadow text-indigo-600' : 'text-slate-500 hover:text-slate-700'}`}
                             >
-                                {f === 'ALL' ? 'All Submissions' : f === 'PENDING' ? 'Needs Grading' : 'Graded'}
+                                {f === 'ALL' ? 'All' : f === 'PENDING' ? 'To Grade' : 'Graded'}
                             </button>
                         ))}
                     </div>
@@ -253,154 +279,186 @@ const TeacherAcademics: React.FC<Props> = ({ activeTab }) => {
                         <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
                         <input 
                             type="text" 
-                            placeholder="Search student..." 
-                            className="w-full pl-9 pr-4 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                            placeholder="Search by student name or ID..." 
+                            className="w-full pl-9 pr-4 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
                         />
                     </div>
                 </div>
 
-                {/* Submissions List */}
-                <div className="grid gap-4">
-                    {filteredSubmissions.map(sub => (
-                        <Card key={sub.id} className={`transition-all duration-200 ${editingSubmission === sub.id ? 'ring-2 ring-indigo-500 shadow-lg' : 'hover:border-indigo-200'}`}>
-                            <div className="flex flex-col lg:flex-row justify-between gap-6">
-                                {/* Student & File Info */}
-                                <div className="flex-1">
-                                    <div className="flex justify-between items-start">
-                                        <div className="flex items-center gap-3">
-                                            <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center font-bold text-slate-500">
-                                                {sub.studentName.charAt(0)}
+                {isLoadingSubmissions ? (
+                    <div className="flex flex-col items-center justify-center py-20 text-slate-400">
+                        <Loader2 className="w-10 h-10 animate-spin mb-4" />
+                        <p className="font-medium">Loading submissions...</p>
+                    </div>
+                ) : (
+                    <div className="grid gap-4">
+                        {filteredSubmissions.map(sub => (
+                            <Card key={sub.id} className={`transition-all duration-200 ${editingSubmission === sub.id ? 'ring-2 ring-indigo-500 shadow-lg' : 'hover:border-indigo-200'}`}>
+                                <div className="flex flex-col lg:flex-row justify-between gap-6">
+                                    <div className="flex-1">
+                                        <div className="flex justify-between items-start">
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center border border-slate-200 shadow-sm">
+                                                    <UserIcon className="w-6 h-6 text-slate-400" />
+                                                </div>
+                                                <div>
+                                                    <h4 className="font-bold text-slate-900">{sub.studentName}</h4>
+                                                    <p className="text-xs text-slate-500 font-bold uppercase">ID: {sub.studentId}</p>
+                                                </div>
                                             </div>
-                                            <div>
-                                                <h4 className="font-bold text-slate-900">{sub.studentName}</h4>
-                                                <p className="text-xs text-slate-500 font-medium">ID: {sub.studentId}</p>
-                                            </div>
+                                            <Badge variant={sub.status === 'GRADED' ? 'success' : sub.status === 'LATE' ? 'error' : 'warning'}>
+                                                {sub.status}
+                                            </Badge>
                                         </div>
-                                        <Badge variant={sub.status === 'GRADED' ? 'success' : sub.status === 'LATE' ? 'error' : 'warning'}>{sub.status}</Badge>
-                                    </div>
-                                    <div className="mt-4 flex items-center gap-3">
-                                        <div className="flex items-center bg-slate-50 px-3 py-2 rounded-lg text-sm text-slate-700 border border-slate-200 w-fit cursor-pointer hover:bg-slate-100 max-w-md truncate">
-                                            <FileIcon className="w-4 h-4 mr-2 text-indigo-500 flex-shrink-0" /> 
-                                            <a href={sub.fileUrl} target="_blank" rel="noopener noreferrer" className="truncate hover:underline hover:text-indigo-600">{sub.fileUrl.split('/').pop()}</a>
-                                        </div>
-                                        <div className="text-xs text-slate-400">Submitted: {sub.submittedDate}</div>
-                                    </div>
-                                </div>
-
-                                {/* Grading Interface */}
-                                <div className="w-full lg:w-[450px] border-t lg:border-t-0 lg:border-l border-slate-100 pt-4 lg:pt-0 lg:pl-6">
-                                    {sub.status === 'GRADED' && editingSubmission !== sub.id ? (
-                                        <div className="space-y-3 bg-green-50/50 p-4 rounded-xl border border-green-100">
-                                            <div className="flex justify-between items-center pb-2 border-b border-green-200/50">
-                                                <span className="text-xs font-bold text-green-700 uppercase tracking-wider flex items-center">
-                                                    <CheckCircle2 className="w-3.5 h-3.5 mr-1.5"/> Graded
-                                                </span>
-                                                <div className="flex items-baseline gap-1">
-                                                    <span className="font-black text-green-700 text-xl">{sub.marks}</span>
-                                                    {selectedAssignment.maxMarks && <span className="text-xs text-green-600 font-medium">/ {selectedAssignment.maxMarks}</span>}
-                                                </div>
-                                            </div>
-                                            {sub.feedback ? (
-                                                <div className="relative">
-                                                    <MessageSquare className="w-3 h-3 text-green-400 absolute top-0.5 left-0" />
-                                                    <p className="text-sm text-green-800 italic pl-5 leading-relaxed">"{sub.feedback}"</p>
-                                                </div>
-                                            ) : <span className="text-xs text-green-600 italic">No feedback provided.</span>}
-                                            <Button size="sm" variant="outline" className="w-full bg-white text-green-700 border-green-200 hover:bg-green-100 h-8 text-xs" onClick={() => { setEditingSubmission(sub.id); setGradeData({ marks: sub.marks, feedback: sub.feedback }); }}>
-                                                <Edit className="w-3 h-3 mr-1.5"/> Edit Grade
-                                            </Button>
-                                        </div>
-                                    ) : (
-                                        <div className={`space-y-4 p-4 rounded-xl border transition-colors ${editingSubmission === sub.id ? 'bg-white border-indigo-100' : 'bg-slate-50 border-slate-200'}`}>
-                                            <div className="flex justify-between items-center">
-                                                <h5 className="text-xs font-bold text-slate-500 uppercase flex items-center"><Edit className="w-3 h-3 mr-1.5"/> Grading</h5>
-                                                {editingSubmission !== sub.id && <span className="text-[10px] text-slate-400">Click below to grade</span>}
-                                            </div>
-                                            
-                                            <div className="grid grid-cols-3 gap-3">
-                                                <div className="col-span-1">
-                                                    <label className="text-[10px] font-bold text-slate-500 mb-1 block uppercase">Marks</label>
-                                                    <div className="relative">
-                                                        <input 
-                                                            className="w-full border border-slate-300 p-2 rounded-lg text-sm font-bold text-center focus:ring-2 focus:ring-indigo-500 outline-none" 
-                                                            placeholder="0"
-                                                            value={editingSubmission === sub.id ? gradeData.marks : ''}
-                                                            onFocus={() => { if(editingSubmission !== sub.id) { setEditingSubmission(sub.id); setGradeData({ marks: sub.marks, feedback: sub.feedback }); }}}
-                                                            onChange={e => setGradeData({ ...gradeData, marks: e.target.value })}
-                                                        />
-                                                        {selectedAssignment.maxMarks && <span className="absolute -bottom-4 right-0 text-[9px] text-slate-400">Max: {selectedAssignment.maxMarks}</span>}
-                                                    </div>
-                                                </div>
-                                                <div className="col-span-2">
-                                                    <label className="text-[10px] font-bold text-slate-500 mb-1 block uppercase">Feedback</label>
-                                                    <textarea 
-                                                        className="w-full border border-slate-300 p-2 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none resize-none h-[38px] min-h-[38px] focus:min-h-[80px] transition-all" 
-                                                        rows={1}
-                                                        placeholder="Enter feedback..."
-                                                        value={editingSubmission === sub.id ? gradeData.feedback : ''}
-                                                        onFocus={() => { if(editingSubmission !== sub.id) { setEditingSubmission(sub.id); setGradeData({ marks: sub.marks, feedback: sub.feedback }); }}}
-                                                        onChange={e => setGradeData({ ...gradeData, feedback: e.target.value })}
-                                                    />
-                                                </div>
-                                            </div>
-
-                                            {editingSubmission === sub.id && (
-                                                <div className="flex gap-2 animate-in fade-in slide-in-from-top-1 duration-200 pt-1">
-                                                    <Button size="sm" className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm" onClick={() => handleSaveGrade(sub.id)} isLoading={isSaving}>
-                                                        <CheckCircle className="w-3 h-3 mr-1.5"/> Save Grade
-                                                    </Button>
-                                                    <Button size="sm" variant="secondary" onClick={() => setEditingSubmission(null)}>
-                                                        <X className="w-3 h-3"/>
-                                                    </Button>
+                                        <div className="mt-4 flex flex-wrap items-center gap-3">
+                                            {sub.fileUrl ? (
+                                                <a href={sub.fileUrl} target="_blank" rel="noopener noreferrer" className="flex items-center bg-indigo-50 px-3 py-2 rounded-lg text-sm text-indigo-700 border border-indigo-100 hover:bg-indigo-100 transition-colors">
+                                                    <FileIcon className="w-4 h-4 mr-2" /> 
+                                                    <span className="font-semibold">View Submission</span>
+                                                </a>
+                                            ) : (
+                                                <div className="flex items-center text-slate-400 text-sm px-3 py-2 bg-slate-50 rounded-lg italic">
+                                                    No file uploaded
                                                 </div>
                                             )}
+                                            <div className="text-xs text-slate-400 font-medium">
+                                                Submitted: {sub.submittedDate}
+                                            </div>
                                         </div>
-                                    )}
+                                    </div>
+
+                                    <div className="w-full lg:w-[450px] bg-slate-50/50 p-4 rounded-xl border border-slate-100">
+                                        {sub.status === 'GRADED' && editingSubmission !== sub.id ? (
+                                            <div className="space-y-3">
+                                                <div className="flex justify-between items-center pb-2 border-b border-slate-200">
+                                                    <span className="text-xs font-bold text-slate-500 uppercase flex items-center">
+                                                        <CheckCircle2 className="w-3.5 h-3.5 mr-1.5 text-green-500"/> Result
+                                                    </span>
+                                                    <div className="flex items-baseline gap-1">
+                                                        <span className="font-black text-slate-900 text-xl">{sub.marks}</span>
+                                                        <span className="text-xs text-slate-400 font-medium">/ {selectedAssignment.maxMarks}</span>
+                                                    </div>
+                                                </div>
+                                                <div className="text-sm text-slate-600 italic bg-white p-3 rounded-lg border border-slate-100">
+                                                    "{sub.feedback || 'No feedback provided.'}"
+                                                </div>
+                                                <Button size="sm" variant="outline" className="w-full h-8 text-xs font-bold" onClick={() => { setEditingSubmission(sub.id); setGradeData({ marks: sub.marks, feedback: sub.feedback }); }}>
+                                                    <Edit className="w-3 h-3 mr-1.5"/> Update Grade
+                                                </Button>
+                                            </div>
+                                        ) : (
+                                            <div className="space-y-4">
+                                                <div className="grid grid-cols-4 gap-4">
+                                                    <div className="col-span-1">
+                                                        <label className="text-[10px] font-bold text-slate-400 mb-1 block uppercase">Score</label>
+                                                        <input 
+                                                            type="number"
+                                                            className="w-full border border-slate-200 p-2.5 rounded-lg text-sm font-black text-center focus:ring-2 focus:ring-indigo-500 outline-none" 
+                                                            placeholder="0"
+                                                            value={editingSubmission === sub.id ? gradeData.marks : ''}
+                                                            onChange={e => { if(editingSubmission !== sub.id) setEditingSubmission(sub.id); setGradeData({ ...gradeData, marks: e.target.value }); }}
+                                                        />
+                                                    </div>
+                                                    <div className="col-span-3">
+                                                        <label className="text-[10px] font-bold text-slate-400 mb-1 block uppercase">Instructor Feedback</label>
+                                                        <textarea 
+                                                            className="w-full border border-slate-200 p-2.5 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none resize-none h-[42px] focus:h-24 transition-all" 
+                                                            placeholder="Great work! Next time focus on..."
+                                                            value={editingSubmission === sub.id ? gradeData.feedback : ''}
+                                                            onChange={e => { if(editingSubmission !== sub.id) setEditingSubmission(sub.id); setGradeData({ ...gradeData, feedback: e.target.value }); }}
+                                                        />
+                                                    </div>
+                                                </div>
+
+                                                {editingSubmission === sub.id && (
+                                                    <div className="flex gap-2 animate-in slide-in-from-top-1 duration-200">
+                                                        <Button size="sm" className="flex-1 shadow-md shadow-indigo-100" onClick={() => handleSaveGrade(sub.id)} isLoading={isSaving}>
+                                                            <Save className="w-3.5 h-3.5 mr-2"/> Save Grade
+                                                        </Button>
+                                                        <Button size="sm" variant="secondary" onClick={() => setEditingSubmission(null)}>
+                                                            <X className="w-3.5 h-3.5"/>
+                                                        </Button>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
+                            </Card>
+                        ))}
+                        {filteredSubmissions.length === 0 && (
+                            <div className="text-center py-20 bg-slate-50 rounded-xl border border-dashed border-slate-200 text-slate-500">
+                                <FileText className="w-12 h-12 mx-auto mb-3 opacity-20" />
+                                <p className="font-medium">No submissions found matching filters.</p>
                             </div>
-                        </Card>
-                    ))}
-                    {filteredSubmissions.length === 0 && (
-                        <div className="text-center py-12 text-slate-500">
-                            <p>No submissions found matching filters.</p>
-                        </div>
-                    )}
-                </div>
+                        )}
+                    </div>
+                )}
             </div>
           );
       }
 
       return (
         <div className="space-y-6 animate-in fade-in duration-500">
-           <div className="flex justify-between items-center"><h2 className="text-2xl font-bold text-slate-900">Assignments</h2><Button onClick={() => setIsAssignmentModalOpen(true)}><Plus className="w-4 h-4 mr-2"/> Create</Button></div>
+           <div className="flex justify-between items-center">
+               <h2 className="text-2xl font-bold text-slate-900">Assignments</h2>
+               <Button onClick={() => setIsAssignmentModalOpen(true)} className="shadow-lg shadow-indigo-100">
+                   <Plus className="w-4 h-4 mr-2"/> Create New
+               </Button>
+           </div>
            <div className="grid gap-4">
              {assignments.map(a => (
-               <Card key={a.id} className="flex flex-col sm:flex-row justify-between items-start sm:items-center hover:border-indigo-200 transition-colors group">
-                 <div>
-                     <h3 className="font-semibold text-lg text-slate-900 group-hover:text-indigo-700 transition-colors">{a.title}</h3>
-                     <div className="flex items-center gap-3 text-sm text-slate-500 mt-1">
-                         <span className="bg-slate-100 px-2 py-0.5 rounded">{a.subject}</span>
-                         <span className="flex items-center"><Calendar className="w-3 h-3 mr-1"/> Due: {a.dueDate}</span>
-                         {a.maxMarks && <span className="text-xs bg-indigo-50 text-indigo-700 px-1.5 rounded border border-indigo-100">Max: {a.maxMarks}</span>}
-                     </div>
+               <Card key={a.id} className="flex flex-col sm:flex-row justify-between items-start sm:items-center group hover:border-indigo-200 transition-all">
+                 <div className="flex items-start gap-4">
+                    <div className="p-3 bg-indigo-50 rounded-xl text-indigo-600 mt-1">
+                        <FileText className="w-6 h-6" />
+                    </div>
+                    <div>
+                        <h3 className="font-bold text-lg text-slate-900 group-hover:text-indigo-600 transition-colors">{a.title}</h3>
+                        <div className="flex items-center gap-3 text-sm text-slate-500 mt-1">
+                            <span className="font-semibold bg-slate-100 px-2 py-0.5 rounded">{a.subject}</span>
+                            <span className="flex items-center"><Calendar className="w-3 h-3 mr-1"/> Due: {a.dueDate}</span>
+                        </div>
+                    </div>
                  </div>
-                 <div className="flex items-center gap-3 mt-4 sm:mt-0">
+                 <div className="flex items-center gap-3 mt-4 sm:mt-0 w-full sm:w-auto">
                     <Badge variant={a.status === 'PENDING' ? 'warning' : 'success'}>{a.status}</Badge>
-                    <Button variant="outline" size="sm" onClick={() => openGrading(a)}>Grade Submissions</Button>
+                    <Button variant="outline" size="sm" onClick={() => openGrading(a)} className="flex-1 sm:flex-none">
+                        Grade Submissions
+                    </Button>
                  </div>
                </Card>
              ))}
            </div>
     
-           <Modal isOpen={isAssignmentModalOpen} onClose={() => setIsAssignmentModalOpen(false)} title="Create Assignment">
+           <Modal isOpen={isAssignmentModalOpen} onClose={() => setIsAssignmentModalOpen(false)} title="Create New Assignment">
              <div className="space-y-4">
-               <input placeholder="Title" className="w-full border p-2 rounded" onChange={e => setNewAssignment({...newAssignment, title: e.target.value})} />
-               <input placeholder="Subject" className="w-full border p-2 rounded" onChange={e => setNewAssignment({...newAssignment, subject: e.target.value})} />
-               <input type="date" className="w-full border p-2 rounded" onChange={e => setNewAssignment({...newAssignment, dueDate: e.target.value})} />
-               <input type="number" placeholder="Max Marks (e.g. 100)" className="w-full border p-2 rounded" onChange={e => setNewAssignment({...newAssignment, maxMarks: parseInt(e.target.value)})} />
-               <Button className="w-full" onClick={handleCreateAssignment} isLoading={isSaving}>Create & Publish</Button>
+               <div className="space-y-2">
+                   <label className="text-sm font-bold text-slate-700">Assignment Title</label>
+                   <input placeholder="e.g. Chapter 4 Integration Practice" className="w-full border p-2.5 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none" onChange={e => setNewAssignment({...newAssignment, title: e.target.value})} />
+               </div>
+               <div className="space-y-2">
+                   <label className="text-sm font-bold text-slate-700">Subject</label>
+                   <select className="w-full border p-2.5 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none bg-white" onChange={e => setNewAssignment({...newAssignment, subject: e.target.value})}>
+                       <option value="">Select Subject...</option>
+                       {MOCK_SUBJECTS.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
+                   </select>
+               </div>
+               <div className="grid grid-cols-2 gap-4">
+                   <div className="space-y-2">
+                       <label className="text-sm font-bold text-slate-700">Due Date</label>
+                       <input type="date" className="w-full border p-2.5 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none" onChange={e => setNewAssignment({...newAssignment, dueDate: e.target.value})} />
+                   </div>
+                   <div className="space-y-2">
+                       <label className="text-sm font-bold text-slate-700">Max Marks</label>
+                       <input type="number" placeholder="100" className="w-full border p-2.5 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none" onChange={e => setNewAssignment({...newAssignment, maxMarks: parseInt(e.target.value)})} />
+                   </div>
+               </div>
+               <div className="pt-2">
+                   <Button className="w-full py-3" onClick={handleCreateAssignment} isLoading={isSaving}>Publish Assignment</Button>
+               </div>
              </div>
            </Modal>
         </div>
@@ -412,9 +470,11 @@ const TeacherAcademics: React.FC<Props> = ({ activeTab }) => {
        <div className="flex justify-between items-center">
           <div>
             <h2 className="text-2xl font-bold text-slate-900">Course Materials</h2>
-            <p className="text-sm text-slate-500">Upload and manage study resources for your subjects.</p>
+            <p className="text-sm text-slate-500">Upload study resources for your students.</p>
           </div>
-          <Button onClick={() => setIsMaterialModalOpen(true)}><UploadCloud className="w-4 h-4 mr-2"/> Upload Material</Button>
+          <Button onClick={() => setIsMaterialModalOpen(true)} className="shadow-lg shadow-indigo-100">
+              <UploadCloud className="w-4 h-4 mr-2"/> Upload Material
+          </Button>
        </div>
        
        <div className="grid gap-4">
@@ -426,18 +486,18 @@ const TeacherAcademics: React.FC<Props> = ({ activeTab }) => {
                     {m.type === 'VIDEO' && <Video className="w-6 h-6"/>}
                     {m.type === 'LINK' && <LinkIcon className="w-6 h-6"/>}
                   </div>
-                  <div className="flex-1">
+                  <div className="flex-1 min-w-0">
                     <div className="flex justify-between items-start">
-                        <h4 className="font-bold text-slate-900">{m.title}</h4>
-                        <div className="flex items-center gap-2">
-                             <Button size="sm" variant="outline" className="opacity-0 group-hover:opacity-100 transition-opacity">View</Button>
-                             <button onClick={() => handleDeleteMaterial(m.id)} className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-full transition-all opacity-0 group-hover:opacity-100">
+                        <h4 className="font-bold text-slate-900 truncate pr-4">{m.title}</h4>
+                        <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                             <Button size="sm" variant="outline" className="h-8">View</Button>
+                             <button onClick={() => handleDeleteMaterial(m.id)} className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all">
                                 <Trash2 className="w-4 h-4" />
                              </button>
                         </div>
                     </div>
-                    <div className="flex items-center gap-2 text-xs text-slate-500 mt-1">
-                        <span className="font-semibold bg-slate-100 px-2 py-0.5 rounded">{m.subject}</span>
+                    <div className="flex items-center gap-2 text-xs text-slate-400 mt-1 font-medium">
+                        <span className="font-bold bg-slate-100 px-2 py-0.5 rounded text-slate-600 uppercase">{m.subject}</span>
                         <span>•</span>
                         <span>Uploaded: {m.date}</span>
                     </div>
@@ -445,47 +505,42 @@ const TeacherAcademics: React.FC<Props> = ({ activeTab }) => {
                </div>
             </Card>
          ))}
-         {materials.length === 0 && (
-            <div className="text-center py-12 border-2 border-dashed border-slate-200 rounded-xl bg-slate-50">
-               <UploadCloud className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-               <p className="text-slate-500 font-medium">No materials uploaded yet.</p>
-            </div>
-         )}
        </div>
 
        <Modal isOpen={isMaterialModalOpen} onClose={() => setIsMaterialModalOpen(false)} title="Upload Course Material">
          <div className="space-y-4">
-           <div className="space-y-2">
-               <label className="text-sm font-medium text-slate-700">Resource Title</label>
-               <input placeholder="e.g. Chapter 1 Notes" className="w-full border p-2 rounded focus:ring-2 focus:ring-indigo-500 outline-none" value={newMaterial.title} onChange={e => setNewMaterial({...newMaterial, title: e.target.value})} />
+           <div className="space-y-1">
+               <label className="text-xs font-bold text-slate-500 uppercase">Resource Title</label>
+               <input placeholder="e.g. Chapter 1 Notes" className="w-full border p-2.5 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500" value={newMaterial.title} onChange={e => setNewMaterial({...newMaterial, title: e.target.value})} />
            </div>
            
-           <div className="space-y-2">
-               <label className="text-sm font-medium text-slate-700">Subject</label>
-               <select className="w-full border p-2 rounded bg-white focus:ring-2 focus:ring-indigo-500 outline-none" value={newMaterial.subject} onChange={e => setNewMaterial({...newMaterial, subject: e.target.value})}>
-                   <option value="">Select Subject...</option>
-                   {MOCK_SUBJECTS.map(s => <option key={s.id} value={s.name}>{s.name} ({s.code})</option>)}
-                   <option value="General">General</option>
-               </select>
-           </div>
-           
-           <div className="space-y-2">
-               <label className="text-sm font-medium text-slate-700">Type</label>
-               <select className="w-full border p-2 rounded bg-white focus:ring-2 focus:ring-indigo-500 outline-none" value={newMaterial.type} onChange={e => setNewMaterial({...newMaterial, type: e.target.value as any})}>
-                 <option value="PDF">PDF Document</option>
-                 <option value="VIDEO">Video Lecture</option>
-                 <option value="LINK">External Link</option>
-               </select>
-           </div>
-
-           <div className="space-y-2">
-               <label className="text-sm font-medium text-slate-700">File / URL</label>
-               <div className="border border-dashed border-slate-300 rounded p-4 text-center cursor-pointer hover:bg-slate-50 transition-colors">
-                   <p className="text-xs text-slate-500">Click to upload file or paste URL here</p>
+           <div className="grid grid-cols-2 gap-4">
+               <div className="space-y-1">
+                   <label className="text-xs font-bold text-slate-500 uppercase">Subject</label>
+                   <select className="w-full border p-2.5 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500 bg-white" value={newMaterial.subject} onChange={e => setNewMaterial({...newMaterial, subject: e.target.value})}>
+                       <option value="">Select...</option>
+                       {MOCK_SUBJECTS.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
+                   </select>
+               </div>
+               <div className="space-y-1">
+                   <label className="text-xs font-bold text-slate-500 uppercase">Type</label>
+                   <select className="w-full border p-2.5 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500 bg-white" value={newMaterial.type} onChange={e => setNewMaterial({...newMaterial, type: e.target.value as any})}>
+                     <option value="PDF">PDF</option>
+                     <option value="VIDEO">Video</option>
+                     <option value="LINK">Link</option>
+                   </select>
                </div>
            </div>
 
-           <Button className="w-full mt-2" onClick={handleUploadMaterial} disabled={!newMaterial.title || !newMaterial.subject}>Upload</Button>
+           <div className="space-y-2">
+               <label className="text-xs font-bold text-slate-500 uppercase">File / Link</label>
+               <div className="border-2 border-dashed border-slate-200 rounded-xl p-6 text-center cursor-pointer hover:bg-slate-50 hover:border-indigo-200 transition-all">
+                   <UploadCloud className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+                   <p className="text-xs text-slate-500 font-medium">Click to select file or paste URL here</p>
+               </div>
+           </div>
+
+           <Button className="w-full py-3" onClick={handleUploadMaterial} disabled={!newMaterial.title}>Confirm Upload</Button>
          </div>
        </Modal>
     </div>
@@ -496,9 +551,16 @@ const TeacherAcademics: React.FC<Props> = ({ activeTab }) => {
         <h2 className="text-2xl font-bold text-slate-900">Exams & Duties</h2>
         <div className="grid gap-4">
            {MOCK_EXAM_DUTIES.map(d => (
-             <Card key={d.id} className="flex items-center justify-between">
-                <div><h3 className="font-semibold">{d.examName}</h3><div className="flex items-center text-sm text-slate-500 mt-1"><Calendar className="w-3 h-3 mr-1"/> {d.date} • {d.time}</div></div>
-                <Badge variant="neutral">{d.role}</Badge>
+             <Card key={d.id} className="flex items-center justify-between border-l-4 border-l-indigo-600">
+                <div>
+                    <h3 className="font-bold text-lg text-slate-900">{d.examName}</h3>
+                    <div className="flex items-center text-sm text-slate-500 mt-1 gap-3 font-medium">
+                        <span className="flex items-center"><Calendar className="w-3.5 h-3.5 mr-1.5"/> {d.date}</span>
+                        <span className="flex items-center"><Clock className="w-3.5 h-3.5 mr-1.5"/> {d.time}</span>
+                        <span className="flex items-center"><FileText className="w-3.5 h-3.5 mr-1.5"/> Room: {d.room}</span>
+                    </div>
+                </div>
+                <Badge variant="neutral" className="bg-indigo-50 text-indigo-700 border-indigo-100 font-bold">{d.role}</Badge>
              </Card>
            ))}
         </div>
