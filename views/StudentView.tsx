@@ -1,10 +1,9 @@
-
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { User, Subject, AttendanceRecord, Assignment, FeeRecord, CollegeEvent, Notice } from '../types';
 import { MOCK_SUBJECTS, MOCK_ASSIGNMENTS, MOCK_FEES, MOCK_NOTICES, MOCK_COLLEGE_EVENTS, MOCK_TICKETS, MOCK_SERVICE_REQUESTS, MOCK_JOBS, MOCK_MESSAGES, MOCK_INTERNAL_ASSESSMENTS } from '../constants';
 import Layout, { NavItem } from '../components/Layout';
 import { appwrite, databases, isAppwriteConfigured, DATABASE_ID, COLLECTIONS, Query, ID } from '../appwriteClient';
-import { LayoutDashboard, CalendarDays, CalendarCheck, Clock, FileText, Folder, Award, Briefcase, Bus, Calendar, CreditCard, Bell, MessageSquare, HelpCircle, User as UserIcon, ScrollText, Laptop, Library, FilePlus, BadgeCheck, Building2 } from 'lucide-react';
+import { Home as HomeIcon, CalendarCheck, Clock, FileText, Award, Briefcase, Bus, Calendar, CreditCard, Bell, MessageSquare, HelpCircle, User as UserIcon, Laptop, Library, FilePlus, BadgeCheck, Building2 } from 'lucide-react';
 import { Toast, ToastProps } from '../components/UIComponents';
 
 // Sub-components
@@ -14,7 +13,6 @@ import StudentAcademics from './student/StudentAcademics';
 import StudentFinances from './student/StudentFinances';
 import StudentSocial from './student/StudentSocial';
 import StudentProfile from './student/StudentProfile';
-import StudentCertificates from './student/StudentCertificates';
 import StudentLibrary from './student/StudentLibrary';
 import StudentIdCard from './student/StudentIdCard';
 import StudentOnlineExams from './student/academics/StudentOnlineExams';
@@ -28,18 +26,15 @@ interface StudentViewProps {
 
 const StudentView: React.FC<StudentViewProps> = ({ user, onLogout }) => {
   const [activeTab, setActiveTab] = useState('dashboard');
-  const [tabHistory, setTabHistory] = useState<string[]>(['dashboard']);
   const [toasts, setToasts] = useState<Omit<ToastProps, 'onClose'>[]>([]);
 
   // Data State
   const [subjects, setSubjects] = useState<Subject[]>(MOCK_SUBJECTS);
   const [assignments, setAssignments] = useState<Assignment[]>(MOCK_ASSIGNMENTS);
   const [fees, setFees] = useState<FeeRecord[]>(MOCK_FEES);
-  const [notices, setNotices] = useState<Notice[]>(MOCK_NOTICES);
   const [events, setEvents] = useState<CollegeEvent[]>(MOCK_COLLEGE_EVENTS);
   const [history, setHistory] = useState<AttendanceRecord[]>([]);
   const [lastUpdate, setLastUpdate] = useState<string | null>(null);
-  const [isOnline, setIsOnline] = useState(navigator.onLine);
 
   // Helper to add toast
   const addToast = useCallback((title: string, message: string, type: 'success' | 'info' | 'warning' | 'error') => {
@@ -52,40 +47,6 @@ const StudentView: React.FC<StudentViewProps> = ({ user, onLogout }) => {
     setToasts(prev => prev.filter(t => t.id !== id));
   }, []);
 
-  // INITIAL DATA FETCH
-  useEffect(() => {
-    if (!isAppwriteConfigured) {
-        setHistory([
-            { id: '1', studentId: user.id, studentName: user.name, subjectName: 'Data Structures', status: 'PRESENT', date: new Date().toISOString() }, 
-            { id: '2', studentId: user.id, studentName: user.name, subjectName: 'Advanced Calculus', status: 'PRESENT', date: new Date(Date.now() - 86400000).toISOString() }, 
-        ]);
-        return;
-    }
-
-    const fetchData = async () => {
-        try {
-            const attendanceResponse = await databases.listDocuments(DATABASE_ID, COLLECTIONS.ATTENDANCE, [Query.equal('student_id', user.id), Query.orderDesc('date')]);
-            if (attendanceResponse.documents) {
-                const mappedHistory: AttendanceRecord[] = attendanceResponse.documents.map(r => ({ id: r.$id, studentId: r.student_id, studentName: user.name, subjectName: r.subject_name, status: r.status, date: r.date }));
-                setHistory(mappedHistory);
-                const subjectStats = new Map<string, { total: number, attended: number }>();
-                mappedHistory.forEach(r => {
-                    const sub = r.subjectName || 'General';
-                    const curr = subjectStats.get(sub) || { total: 0, attended: 0 };
-                    curr.total++;
-                    if (r.status === 'PRESENT') curr.attended++;
-                    subjectStats.set(sub, curr);
-                });
-                setSubjects(prev => prev.map(s => {
-                    const stat = subjectStats.get(s.name);
-                    return stat ? { ...s, totalClasses: stat.total, attendedClasses: stat.attended } : s;
-                }));
-            }
-        } catch (error) { console.error(error); }
-    };
-    fetchData();
-  }, [user.id]);
-
   const handleMarkAttendance = useCallback(async (subjectName: string) => {
     const newRecord: AttendanceRecord = { id: Math.random().toString(36).substr(2, 9), studentId: user.id, studentName: user.name, subjectName: subjectName, status: 'PRESENT', date: new Date().toISOString() };
     setHistory(prev => [newRecord, ...prev]);
@@ -95,41 +56,16 @@ const StudentView: React.FC<StudentViewProps> = ({ user, onLogout }) => {
   }, [user.id, user.name, addToast]);
 
   const handleTabChange = useCallback((id: string) => {
-    setActiveTab(prev => {
-        if (prev === id) return prev;
-        setTabHistory(history => [...history, id]);
-        return id;
-    });
+    setActiveTab(id);
   }, []);
-
-  const handleBack = useCallback(() => {
-    setTabHistory(prev => {
-        if (prev.length <= 1) return prev;
-        const newHistory = [...prev];
-        newHistory.pop();
-        const lastTab = newHistory[newHistory.length - 1];
-        setActiveTab(lastTab);
-        return newHistory;
-    });
-  }, []);
-
-  const handleEventRegister = useCallback((id: string) => {
-    setEvents(prev => prev.map(e => e.id === id ? { ...e, registrationStatus: 'REGISTERED' } : e));
-    addToast("Registration Successful", "You have registered for the event.", "success");
-  }, [addToast]);
-
-  const handleShowToast = useCallback((title: string, message: string, type: 'success' | 'info' | 'warning' | 'error') => {
-    addToast(title, message, type);
-  }, [addToast]);
 
   const navItems: NavItem[] = useMemo(() => [
-    { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard className="w-5 h-5"/>, category: 'MAIN' },
+    { id: 'dashboard', label: 'Home', icon: <HomeIcon className="w-5 h-5"/>, category: 'MAIN' },
     { id: 'id_card', label: 'ID Card', icon: <BadgeCheck className="w-5 h-5"/>, category: 'MAIN' },
     { id: 'attendance', label: 'Attendance', icon: <CalendarCheck className="w-5 h-5"/>, category: 'ACADEMICS' },
     { id: 'timetable', label: 'Timetable', icon: <Clock className="w-5 h-5"/>, category: 'ACADEMICS' },
     { id: 'assignments', label: 'Assignments', icon: <FileText className="w-5 h-5"/>, category: 'ACADEMICS' },
     { id: 'online_exam', label: 'Online Exam', icon: <Laptop className="w-5 h-5"/>, category: 'ACADEMICS' },
-    { id: 'course_registration', label: 'Course Reg.', icon: <FilePlus className="w-5 h-5"/>, category: 'ACADEMICS' },
     { id: 'library', label: 'Library', icon: <Library className="w-5 h-5"/>, category: 'ACADEMICS' },
     { id: 'results', label: 'Exams & Results', icon: <Award className="w-5 h-5"/>, category: 'ACADEMICS' },
     { id: 'fees', label: 'Fees', icon: <CreditCard className="w-5 h-5"/>, category: 'FINANCE' },
@@ -149,26 +85,49 @@ const StudentView: React.FC<StudentViewProps> = ({ user, onLogout }) => {
     return total > 0 ? Math.round((attended / total) * 100) : 0;
   }, [subjects]);
 
+  const renderActiveView = () => {
+    switch (activeTab) {
+      case 'dashboard': return <StudentDashboard user={user} subjects={subjects} assignments={assignments} fees={fees} averageAttendance={averageAttendance} isOnline={true} notices={MOCK_NOTICES} lastUpdate={lastUpdate} onNavigate={handleTabChange} navItems={navItems} />;
+      case 'attendance': return <StudentAttendance history={history} subjects={subjects} lastUpdate={lastUpdate} onMarkAttendance={handleMarkAttendance} />;
+      case 'id_card': return <StudentIdCard user={user} />;
+      case 'timetable':
+      case 'assignments':
+      case 'materials':
+      case 'course_registration': return <StudentAcademics activeTab={activeTab} user={user} assignments={assignments} setAssignments={setAssignments} isOnline={true} subjects={subjects} />;
+      case 'online_exam': return <StudentOnlineExams />;
+      case 'library': return <StudentLibrary />;
+      case 'results': return <StudentResults />;
+      case 'fees':
+      case 'placements':
+      case 'services': return <StudentFinances activeTab={activeTab} user={user} fees={fees} setFees={setFees} jobs={MOCK_JOBS} serviceRequests={MOCK_SERVICE_REQUESTS} />;
+      case 'events':
+      case 'calendar':
+      case 'notices':
+      case 'messages':
+      case 'support': return <StudentSocial activeTab={activeTab} user={user} events={events} notices={MOCK_NOTICES} messages={MOCK_MESSAGES} tickets={MOCK_TICKETS} history={history} onRegister={() => {}} />;
+      case 'college_info': return <StudentCollegeInfo />;
+      case 'profile': return <StudentProfile user={user} onShowToast={addToast} />;
+      default: return null;
+    }
+  };
+
   return (
-    <Layout user={user} onLogout={onLogout} navItems={navItems} activeTab={activeTab} onTabChange={handleTabChange} onBack={handleBack} showBackButton={tabHistory.length > 1}>
+    <Layout user={user} onLogout={onLogout} navItems={navItems} activeTab={activeTab} onTabChange={handleTabChange}>
       <div className="fixed top-20 right-4 z-50 flex flex-col gap-2 w-full max-w-sm pointer-events-none">
          {toasts.map(toast => <Toast key={toast.id} {...toast} onClose={removeToast} />)}
       </div>
 
-      <div key={activeTab} className="animate-in fade-in slide-in-from-top-2 duration-300 ease-out">
-          {activeTab === 'dashboard' && <StudentDashboard user={user} subjects={subjects} assignments={assignments} fees={fees} averageAttendance={averageAttendance} isOnline={isOnline} notices={notices} lastUpdate={lastUpdate} onNavigate={handleTabChange} navItems={navItems} />}
-          {activeTab === 'attendance' && <StudentAttendance history={history} subjects={subjects} lastUpdate={lastUpdate} onMarkAttendance={handleMarkAttendance} />}
-          {activeTab === 'id_card' && <StudentIdCard user={user} />}
-          {(['timetable', 'assignments', 'materials', 'course_registration'].includes(activeTab)) && <StudentAcademics activeTab={activeTab} user={user} assignments={assignments} setAssignments={setAssignments} isOnline={isOnline} subjects={subjects} />}
-          {activeTab === 'online_exam' && <StudentOnlineExams />}
-          {activeTab === 'library' && <StudentLibrary />}
-          {activeTab === 'certificates' && <StudentCertificates />}
-          {activeTab === 'results' && <StudentResults />}
-          {(['fees', 'placements', 'services'].includes(activeTab)) && <StudentFinances activeTab={activeTab} user={user} fees={fees} setFees={setFees} jobs={MOCK_JOBS} serviceRequests={MOCK_SERVICE_REQUESTS} />}
-          {(['events', 'calendar', 'notices', 'messages', 'support'].includes(activeTab)) && <StudentSocial activeTab={activeTab} user={user} events={events} notices={notices} messages={MOCK_MESSAGES} tickets={MOCK_TICKETS} history={history} onRegister={handleEventRegister} />}
-          {activeTab === 'college_info' && <StudentCollegeInfo />}
-          {activeTab === 'profile' && <StudentProfile user={user} onShowToast={handleShowToast} />}
-      </div>
+      {activeTab === 'dashboard' ? (
+        <div className="flex-1 overflow-hidden">
+           {renderActiveView()}
+        </div>
+      ) : (
+        <section className="viewport-section p-4 sm:p-8">
+          <div className="w-full max-w-[1400px] mx-auto pb-12">
+            {renderActiveView()}
+          </div>
+        </section>
+      )}
     </Layout>
   );
 };

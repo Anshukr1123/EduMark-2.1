@@ -1,85 +1,153 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="h-full">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <title>EduMark - Attendance Management</title>
+    <title>EduMark - Institutional Excellence</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Outfit:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
     <style>
-      :root {
-        --primary: #4f46e5;
-        --bg-mesh: #f8fafc;
-      }
-      
-      /* Force strict full viewport height and width */
+      /* Full Viewport App Reset */
       html, body, #root {
         height: 100%;
         width: 100%;
         margin: 0;
         padding: 0;
-        overflow: hidden; /* Prevent body scroll, layout handles internal scrolling */
-      }
-
-      /* Enable scrolling only when on the landing page (Login view) */
-      body.is-landing {
-        overflow-y: auto;
-        overflow-x: hidden;
-        scroll-behavior: smooth;
-        scroll-snap-type: y mandatory;
+        overflow: hidden;
       }
 
       body {
         font-family: 'Inter', sans-serif;
-        background-color: var(--bg-mesh);
-        color: #1e293b;
+        background-color: #f8fafc;
+        color: #0f172a;
         -webkit-font-smoothing: antialiased;
-        -moz-osx-font-smoothing: grayscale;
       }
 
-      /* Reusable Full-Screen Viewport Section for Landing Page */
-      .full-screen {
+      h1, h2, h3, h4, .font-heading {
+        font-family: 'Outfit', sans-serif;
+      }
+
+      /* Scroll Snap Logic for Landing */
+      .is-landing main {
         height: 100vh;
-        width: 100vw;
-        scroll-snap-align: start;
-        scroll-snap-stop: always;
-        position: relative;
-        display: flex;
-        flex-direction: column;
-        overflow: hidden;
-      }
-      
-      /* Global Fluid Scrollbars */
-      *::-webkit-scrollbar {
-        width: 6px;
-        height: 6px;
-      }
-      *::-webkit-scrollbar-track {
-        background: transparent;
-      }
-      *::-webkit-scrollbar-thumb {
-        background: rgba(0,0,0,0.08);
-        border-radius: 100px;
-      }
-      *::-webkit-scrollbar-thumb:hover {
-        background: rgba(79, 70, 229, 0.3);
-      }
-
-      .no-scrollbar {
-        -ms-overflow-style: none;
+        overflow-y: auto;
+        scroll-snap-type: y mandatory;
+        scroll-behavior: smooth;
         scrollbar-width: none;
       }
-      .no-scrollbar::-webkit-scrollbar {
+
+      .is-landing main::-webkit-scrollbar {
         display: none;
       }
 
-      @keyframes float {
-        0%, 100% { transform: translateY(0); }
-        50% { transform: translateY(-10px); }
+      /* Dashboard Snap Logic */
+      .dashboard-snap-container {
+        height: calc(100vh - 64px); /* Subtract Header Height */
+        overflow-y: auto;
+        scroll-snap-type: y mandatory;
+        scroll-behavior: smooth;
+        -ms-overflow-style: none;
+        scrollbar-width: none;
+      }
+
+      .dashboard-snap-container::-webkit-scrollbar {
+        display: none;
+      }
+
+      .dashboard-section {
+        height: calc(100vh - 64px);
+        scroll-snap-align: start;
+        scroll-snap-stop: always;
+        padding: 2rem;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        position: relative;
+      }
+
+      .full-section {
+        height: 100vh;
+        width: 100%;
+        scroll-snap-align: start;
+        scroll-snap-stop: always;
+        position: relative;
+        overflow: hidden;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .no-scrollbar::-webkit-scrollbar { display: none; }
+      .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+      @keyframes fade-up {
+        from { opacity: 0; transform: translateY(40px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
+
+      @keyframes reveal-scale {
+        from { opacity: 0; transform: scale(0.9) translateY(20px); }
+        to { opacity: 1; transform: scale(1) translateY(0); }
+      }
+
+      .animate-fade-up {
+        animation: fade-up 1s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+      }
+
+      .animate-reveal {
+        animation: reveal-scale 1.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+      }
+
+      /* Hover Effects */
+      .hover-lift {
+        transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.4s ease;
+      }
+      .hover-lift:hover {
+        transform: translateY(-12px);
+      }
+
+      /* Perspective for cards */
+      .perspective-1000 {
+        perspective: 1000px;
+      }
+
+      /* Custom Marquee for Ticker */
+      @keyframes marquee { 0% { transform: translateX(0); } 100% { transform: translateX(-100%); } }
+      .animate-marquee { animation: marquee 50s linear infinite; }
+
+      /* Section Indicators */
+      .snap-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: rgba(15, 23, 42, 0.2);
+        transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+        cursor: pointer;
+      }
+      .snap-dot.active {
+        background: #4f46e5;
+        height: 32px;
+        border-radius: 4px;
       }
       
-      .animate-float {
-        animation: float 6s ease-in-out infinite;
+      .dashboard-nav-dot {
+        width: 6px;
+        height: 6px;
+        background: rgba(15, 23, 42, 0.1);
+        border-radius: 2px;
+        transition: all 0.3s ease;
+      }
+      .dashboard-nav-dot.active {
+        background: #4f46e5;
+        height: 24px;
+        width: 6px;
+      }
+
+      .dark .snap-dot {
+        background: rgba(255, 255, 255, 0.2);
+      }
+      .dark .snap-dot.active {
+        background: #818cf8;
       }
     </style>
   <script type="importmap">
@@ -98,7 +166,7 @@
 }
 </script>
 </head>
-  <body>
-    <div id="root"></div>
+  <body class="h-full w-full">
+    <div id="root" class="h-full w-full"></div>
   </body>
 </html>

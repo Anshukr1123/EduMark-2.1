@@ -1,8 +1,7 @@
 
 import React from 'react';
-// Added Badge to the imports from UIComponents
-import { Card, Badge } from '../../../components/UIComponents';
-import { CreditCard, Award, Zap, TrendingUp, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { Card, Badge, Button } from '../../../components/UIComponents';
+import { CreditCard, Award, Zap, TrendingUp, AlertCircle, CheckCircle2, ArrowRight } from 'lucide-react';
 import { Assignment, FeeRecord } from '../../../types';
 
 interface Props {
@@ -17,107 +16,104 @@ const StudentStats: React.FC<Props> = ({ averageAttendance, assignments, fees, o
   const overdueFees = fees.filter(f => f.status === 'OVERDUE').reduce((acc, curr) => acc + curr.amount, 0);
 
   return (
-    <div className="grid gap-2.5 md:grid-cols-2 lg:grid-cols-4">
+    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
       {/* Attendance Stats */}
-      <Card className={`bg-gradient-to-br from-indigo-600 to-indigo-800 text-white shadow-md border-none relative overflow-hidden group h-full flex flex-col justify-between p-1.5`}>
-        <div className="absolute top-[-20%] right-[-20%] w-24 h-24 bg-white/10 rounded-full blur-2xl transition-transform duration-700 group-hover:scale-150"></div>
-        <div className="p-3.5 relative z-10 space-y-2">
+      <Card className={`bg-gradient-to-br from-indigo-700 to-indigo-900 text-white shadow-2xl border-none relative overflow-hidden group h-full flex flex-col justify-between p-2`}>
+        <div className="absolute top-[-30%] right-[-30%] w-32 h-32 bg-white/20 rounded-full blur-3xl transition-transform duration-1000 group-hover:scale-150"></div>
+        <div className="p-6 relative z-10 space-y-4">
           <div className="flex justify-between items-start">
-             <span className="text-indigo-100 text-[7px] font-black uppercase tracking-[0.2em]">Pulse Rating</span>
-             <Zap className="w-3 h-3 text-yellow-400 fill-yellow-400 animate-pulse" />
+             <span className="text-indigo-200 text-[10px] font-black uppercase tracking-[0.3em]">Pulse Integrity</span>
+             <Zap className="w-5 h-5 text-yellow-400 fill-yellow-400 animate-pulse" />
           </div>
-          <div className="flex items-baseline gap-1.5">
-            <span className="text-4xl font-black tracking-tighter tabular-nums">{averageAttendance}%</span>
-            <span className={`text-[7px] font-black uppercase tracking-widest ${averageAttendance >= 75 ? 'text-green-300' : 'text-red-300'}`}>
-                {averageAttendance >= 75 ? 'Optimal' : 'Action'}
+          <div className="flex items-baseline gap-2">
+            <span className="text-6xl font-black tracking-tighter tabular-nums">{averageAttendance}%</span>
+            <span className={`text-[10px] font-black uppercase tracking-widest ${averageAttendance >= 75 ? 'text-emerald-300' : 'text-red-300'}`}>
+                {averageAttendance >= 75 ? 'Optimal' : 'Urgent'}
             </span>
           </div>
-          <div className="pt-1">
-             <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[7px] font-black uppercase tracking-widest ${averageAttendance >= 75 ? 'bg-white/15 text-white' : 'bg-red-500/30 text-white border border-red-400/30'}`}>
-                 <TrendingUp className="w-2.5 h-2.5 mr-1" /> STREAK: 12D
+          <div className="pt-2">
+             <span className={`inline-flex items-center rounded-xl px-4 py-1 text-[10px] font-black uppercase tracking-widest ${averageAttendance >= 75 ? 'bg-white/10 text-white backdrop-blur-md' : 'bg-red-500 text-white shadow-lg shadow-red-500/40'}`}>
+                 <TrendingUp className="w-3 h-3 mr-2" /> STREAK: 12 DAYS
              </span>
           </div>
         </div>
       </Card>
 
       {/* Task Stats */}
-      <Card className="relative group hover:border-indigo-300 transition-all flex flex-col justify-between p-1.5">
-          <div className="p-3.5 space-y-2">
+      <Card className="relative group hover:border-indigo-500 border-2 border-transparent transition-all shadow-xl flex flex-col justify-between p-2">
+          <div className="p-6 space-y-4">
               <div className="flex justify-between items-start">
-                <span className="text-slate-400 text-[7px] font-black uppercase tracking-[0.2em]">Academic Ops</span>
-                <Badge variant="warning" className="text-[6px] font-black border-none px-1.5 py-0 shadow-sm leading-none">QUEUE</Badge>
+                <span className="text-slate-400 text-[10px] font-black uppercase tracking-[0.3em]">Academic Ops</span>
+                <Badge className="bg-amber-100 text-amber-700 text-[10px] font-black border-none px-3 py-1 shadow-sm leading-none tracking-widest">QUEUE</Badge>
               </div>
               <div className="flex justify-between items-center">
-                  <span className="text-4xl font-black text-slate-900 tracking-tighter tabular-nums">{pendingCount}</span>
-                  <CheckCircle2 className="text-indigo-500 h-6 w-6 opacity-20 group-hover:opacity-40 transition-opacity" />
+                  <span className="text-6xl font-black text-slate-900 tracking-tighter tabular-nums">{pendingCount}</span>
+                  <CheckCircle2 className="text-indigo-600 h-10 w-10 opacity-10 group-hover:opacity-100 group-hover:scale-110 transition-all duration-500" />
               </div>
-              <div className="space-y-0.5">
-                  <p className="text-[7.5px] text-slate-400 font-bold uppercase tracking-widest">2 Due Cycles Remaining</p>
-                  <div className="w-full h-1 bg-slate-50 rounded-full overflow-hidden border border-slate-100">
-                      <div className="h-full bg-indigo-500 w-[40%] rounded-full"></div>
+              <div className="space-y-1.5">
+                  <p className="text-[10px] text-slate-500 font-black uppercase tracking-widest">Submission Pipeline</p>
+                  <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden border border-slate-50 shadow-inner">
+                      <div className="h-full bg-indigo-600 w-[65%] rounded-full shadow-[0_0_10px_rgba(79,70,229,0.4)]"></div>
                   </div>
               </div>
           </div>
           {onNavigate && (
               <button 
                   onClick={() => onNavigate('assignments')}
-                  className="mt-1 px-3.5 pb-2 text-[7px] font-black text-indigo-600 hover:text-indigo-800 uppercase tracking-[0.2em] flex items-center gap-1 transition-all"
+                  className="mt-1 px-6 pb-6 text-[10px] font-black text-indigo-600 hover:text-indigo-900 uppercase tracking-[0.3em] flex items-center gap-2 transition-all hover:translate-x-1"
               >
-                  ROUTING <ArrowRight className="w-2.5 h-2.5" />
+                  GATEWAY ROUTING <ArrowRight className="w-4 h-4" />
               </button>
           )}
       </Card>
 
       {/* Finance Stats */}
-      <Card className="relative group hover:border-amber-300 transition-all flex flex-col justify-between p-1.5">
-          <div className="p-3.5 space-y-2">
+      <Card className="relative group hover:border-amber-500 border-2 border-transparent transition-all shadow-xl flex flex-col justify-between p-2">
+          <div className="p-6 space-y-4">
               <div className="flex justify-between items-start">
-                <span className="text-slate-400 text-[7px] font-black uppercase tracking-[0.2em]">Financial Ledger</span>
-                <Badge variant="error" className="text-[6px] font-black border-none px-1.5 py-0 shadow-sm leading-none">DUES</Badge>
+                <span className="text-slate-400 text-[10px] font-black uppercase tracking-[0.3em]">Institutional Ledger</span>
+                <Badge className="bg-red-50 text-red-600 text-[10px] font-black border-none px-3 py-1 shadow-sm leading-none tracking-widest">DUE</Badge>
               </div>
               <div className="flex justify-between items-center">
-                  <span className={`text-3xl font-black tracking-tighter tabular-nums ${overdueFees > 0 ? 'text-red-600' : 'text-slate-900'}`}>₹{fees.filter(f => f.status !== 'PAID').reduce((acc, curr) => acc + curr.amount, 0).toLocaleString()}</span>
-                  <CreditCard className="text-slate-300 h-6 w-6 opacity-20 group-hover:opacity-40 transition-opacity" />
+                  <span className={`text-4xl font-black tracking-tighter tabular-nums ${overdueFees > 0 ? 'text-red-600' : 'text-slate-900'}`}>₹{fees.filter(f => f.status !== 'PAID').reduce((acc, curr) => acc + curr.amount, 0).toLocaleString()}</span>
+                  <CreditCard className="text-amber-500 h-10 w-10 opacity-10 group-hover:opacity-100 group-hover:scale-110 transition-all duration-500" />
               </div>
-              <p className="text-[7.5px] text-slate-400 font-bold uppercase tracking-widest">Cycle Cut-off: Oct 30</p>
+              <p className="text-[10px] text-slate-500 font-black uppercase tracking-widest">Audit Cycle: Oct 30</p>
           </div>
           {onNavigate && (
               <button 
                   onClick={() => onNavigate('fees')}
-                  className="mt-1 px-3.5 pb-2 text-[7px] font-black text-amber-600 hover:text-amber-800 uppercase tracking-[0.2em] flex items-center gap-1 transition-all"
+                  className="mt-1 px-6 pb-6 text-[10px] font-black text-amber-600 hover:text-amber-900 uppercase tracking-[0.3em] flex items-center gap-2 transition-all hover:translate-x-1"
               >
-                  SETTLEMENT <ArrowRight className="w-2.5 h-2.5" />
+                  SETTLEMENT NODE <ArrowRight className="w-4 h-4" />
               </button>
           )}
       </Card>
 
       {/* Result Stats */}
-      <Card className="bg-slate-900 text-white border-none shadow-md relative overflow-hidden group flex flex-col justify-between p-1.5">
-          <div className="absolute top-[-20%] right-[-20%] w-24 h-24 bg-indigo-500/5 rounded-full blur-2xl"></div>
-          <div className="p-3.5 space-y-2 relative z-10">
+      <Card className="bg-slate-900 text-white border-none shadow-2xl relative overflow-hidden group flex flex-col justify-between p-2">
+          <div className="absolute top-[-40%] right-[-40%] w-48 h-48 bg-indigo-500/10 rounded-full blur-[80px]"></div>
+          <div className="p-6 space-y-4 relative z-10">
               <div className="flex justify-between items-start">
-                <span className="text-slate-500 text-[7px] font-black uppercase tracking-[0.2em]">Intelligence Tier</span>
-                <Award className="w-3 h-3 text-yellow-500" />
+                <span className="text-slate-500 text-[10px] font-black uppercase tracking-[0.3em]">Merit Hierarchy</span>
+                <Award className="w-5 h-5 text-yellow-500 drop-shadow-[0_0_8px_rgba(234,179,8,0.5)]" />
               </div>
               <div className="flex justify-between items-center">
-                  <span className="text-4xl font-black text-white tracking-tighter tabular-nums">8.85</span>
-                  <span className="text-[7.5px] font-black text-indigo-400 uppercase tracking-widest self-end mb-1">GPA</span>
+                  <span className="text-6xl font-black text-white tracking-tighter tabular-nums drop-shadow-md">8.85</span>
+                  <span className="text-[11px] font-black text-indigo-400 uppercase tracking-[0.4em] self-end mb-2">GPA</span>
               </div>
-              <div className="pt-1 flex items-center gap-1.5">
-                 <div className="flex -space-x-1">
-                    <div className="w-4 h-4 rounded-full border border-slate-700 bg-indigo-500 flex items-center justify-center text-[6px] font-bold">1</div>
-                    <div className="w-4 h-4 rounded-full border border-slate-700 bg-indigo-600 flex items-center justify-center text-[6px] font-bold">2</div>
+              <div className="pt-2 flex items-center gap-3">
+                 <div className="flex -space-x-2">
+                    {[1,2,3].map(i => (
+                        <div key={i} className="w-6 h-6 rounded-full border-2 border-slate-900 bg-indigo-600 flex items-center justify-center text-[8px] font-black shadow-lg">1</div>
+                    ))}
                  </div>
-                 <span className="text-[7.5px] font-bold text-slate-400 uppercase tracking-widest">TOP 10%</span>
+                 <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">TOP 10% PERCENTILE</span>
               </div>
           </div>
       </Card>
     </div>
   );
 };
-
-const ArrowRight = ({ className }: { className?: string }) => (
-    <svg className={className} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
-);
 
 export default StudentStats;
